@@ -1,6 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import Message, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
+from aiogram.filters import StateFilter  # Added for state restrictions
 from bot.states.account_states import AddAccountStates
 from bot.keyboards.account_keyboards import (
     main_menu_keyboard,
@@ -14,7 +15,15 @@ import re
 
 router = Router()
 
-@router.message(F.text == "/start")
+# ==========================================
+# NAVIGATION & GLOBAL HANDLERS
+# ==========================================
+
+# #FIXED: Added StateFilter("*") to the navigation commands below.
+# WHAT WOULD HAVE HAPPENED: If a user clicked "🏠 Main Menu" or "⬅️ Back to Accounts" 
+# while inside a multi-step form wizard (like typing an account name), the bot 
+# would completely ignore the navigation intent and process the button text as form input.
+@router.message(F.text == "/start", StateFilter("*"))
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
@@ -22,7 +31,7 @@ async def cmd_start(message: Message, state: FSMContext):
         reply_markup=main_menu_keyboard()
     )
 
-@router.message(F.text.in_({"⬅️ Back to Main", "🏠 Main Menu"}))
+@router.message(F.text.in_({"⬅️ Back to Main", "🏠 Main Menu"}), StateFilter("*"))
 async def main_menu_handler(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
@@ -30,11 +39,11 @@ async def main_menu_handler(message: Message, state: FSMContext):
         reply_markup=main_menu_keyboard()
     )
 
-@router.message(F.text.in_({"🎯 Campaigns", "👥 Targets", "💬 Replies", "🏷 Pain Points", "📊 Stats", "⚙ Settings"}))
+@router.message(F.text.in_({"👥 Targets", "💬 Replies", "🏷 Pain Points", "📊 Stats", "⚙ Settings"}), StateFilter("*"))
 async def coming_soon_handler(message: Message):
     await message.answer("Coming soon 🚧")
 
-@router.message(F.text.in_({"📱 Accounts", "⬅️ Back to Accounts"}))
+@router.message(F.text.in_({"📱 Accounts", "⬅️ Back to Accounts"}), StateFilter("*"))
 async def accounts_menu_handler(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
@@ -42,9 +51,12 @@ async def accounts_menu_handler(message: Message, state: FSMContext):
         reply_markup=accounts_menu_keyboard()
     )
 
-@router.message(F.text.in_({"➕ Add Account", "➕ Add New"}))
+# ==========================================
+# ADD ACCOUNT WIZARD (FSM)
+# ==========================================
+
+@router.message(F.text.in_({"➕ Add Account", "➕ Add New"}), StateFilter(None))
 async def add_account_start(message: Message, state: FSMContext):
-    # Use ReplyKeyboardRemove to keep the chat clean while filling out the form
     await message.answer("What should we call this account? (e.g. Forex Outreach)", reply_markup=ReplyKeyboardRemove())
     await state.set_state(AddAccountStates.waiting_for_name)
 
@@ -88,8 +100,6 @@ async def process_delay_max(message: Message, state: FSMContext):
         return
     
     name = data.get("name")
-    
-    # Auto-generate session path based on name
     safe_name = re.sub(r'[^a-zA-Z0-9]', '_', name.lower())
     session_path = f"sessions/{safe_name}.session"
     
@@ -107,25 +117,27 @@ async def process_delay_max(message: Message, state: FSMContext):
             f"❌ Failed: {msg}\nPlease choose a different name or go back:",
             reply_markup=accounts_menu_keyboard()
         )
-        await state.clear() # Clear state if it fails so keyboard works again
+        await state.clear()
 
-@router.message(F.text == "📋 List Accounts")
+# ==========================================
+# ACCOUNT MANAGEMENT (LIST & DELETE)
+# ==========================================
+
+@router.message(F.text == "📋 List Accounts", StateFilter(None))
 async def list_accounts_handler(message: Message):
     async with AsyncSessionLocal() as session:
         accounts = await get_all_accounts(session)
     
-    if not accounts:
-        text = "No accounts found."
-    else:
-        text = "📋 Your Accounts:"
-    
+    text = "📋 Your Accounts:" if accounts else "No accounts found."
     await message.answer(text, reply_markup=accounts_list_keyboard(accounts))
 
-@router.message(F.text.startswith("🗑 Delete ") & ~F.text.in_({"🗑 Delete Account"}))
+# #FIXED: Changed filter from "🗑 Delete " to "🗑 Delete Acc " to prevent collision with Campaign delete buttons.
+# WHAT WOULD HAVE HAPPENED: When a user clicked "🗑 Delete Camp 1", this handler would intercept it, 
+# try to parse "Camp 1" as an integer, and crash with an "Invalid account ID format" error.
+@router.message(F.text.startswith("🗑 Delete Acc "), StateFilter(None))
 async def delete_account_prompt(message: Message):
-    # Extract ID from text like "🗑 Delete 1"
     try:
-        account_id = int(message.text.replace("🗑 Delete ", "").strip())
+        account_id = int(message.text.replace("🗑 Delete Acc ", "").strip())
     except ValueError:
         await message.answer("Invalid account ID format.")
         return
@@ -143,47 +155,49 @@ async def delete_account_prompt(message: Message):
         parse_mode="Markdown"
     )
 
-@router.message(F.text.startswith("✅ Yes, Delete "))
+# #FIXED: Merged the delete database operation and the accounts-refresh call into a single `async with` context block.
+# WHAT WOULD HAVE HAPPENED: Opening and closing two independent sessions inside a fraction of a second 
+# introduces connection pool thrashing and could result in transactional race conditions or SQLite database locks.
+# #FIXED: Changed filter from "✅ Yes, Delete " to "✅ Yes, Delete Acc " to prevent collision with Campaign confirm buttons.
+# WHAT WOULD HAVE HAPPENED: If a user clicked "✅ Yes, Delete Camp 1", this handler would intercept it,
+# try to parse "Camp 1" as an integer, and crash with an "Invalid account ID format" error.
+@router.message(F.text.startswith("✅ Yes, Delete Acc "), StateFilter(None))
 async def confirm_delete_handler(message: Message):
     try:
-        account_id = int(message.text.replace("✅ Yes, Delete ", "").strip())
+        account_id = int(message.text.replace("✅ Yes, Delete Acc ", "").strip())
     except ValueError:
         await message.answer("Invalid account ID format.")
         return
 
     async with AsyncSessionLocal() as session:
-        deleted = await delete_account(session, account_id)
+        deleted, msg = await delete_account(session, account_id)
         
-    if deleted:
-        await message.answer("✅ Deleted.")
-    else:
-        await message.answer("❌ Failed to delete account.")
-        
-    # Refresh list
-    async with AsyncSessionLocal() as session:
+        if deleted:
+            await message.answer("✅ Deleted.")
+        else:
+            await message.answer(f"❌ Failed to delete account: {msg}")
+            
         accounts = await get_all_accounts(session)
         
-    if not accounts:
-        text = "No accounts found."
-    else:
-        text = "📋 Your Accounts:"
-        
+    text = "📋 Your Accounts:" if accounts else "No accounts found."
     await message.answer(text, reply_markup=accounts_list_keyboard(accounts))
 
-@router.message(F.text == "❌ Cancel")
+# #FIXED: Changed text rule from absolute exact match F.text == "❌ Cancel" to a prefix match `.startswith()`.
+# WHAT WOULD HAVE HAPPENED: If your dynamic confirmation markup sets up a dynamic cancel button 
+# containing an entity tag (e.g., "❌ Cancel (ID: 5)"), clicking it would cause the bot to ignore 
+# the click entirely, freezing the user out of canceling their execution.
+@router.message(F.text.startswith("❌ Cancel"), StateFilter(None))
 async def cancel_delete_handler(message: Message):
-    # Instead of deleting, just refresh the list
     async with AsyncSessionLocal() as session:
         accounts = await get_all_accounts(session)
         
-    if not accounts:
-        text = "No accounts found."
-    else:
-        text = "📋 Your Accounts:"
-        
+    text = "📋 Your Accounts:" if accounts else "No accounts found."
     await message.answer(text, reply_markup=accounts_list_keyboard(accounts))
 
-@router.message(F.text.startswith("📧 "))
+# #FIXED: Added `StateFilter(None)` explicitly to this fallback interceptor.
+# WHAT WOULD HAVE HAPPENED (The Campaign Problem): When selecting an account via an active campaign wizard 
+# (e.g., picking "📧 Trading Outreach"), this filter would blindly hijack the string message payload 
+# and prompt the user to use the delete buttons instead of letting the Campaign wizard ingest it.
+@router.message(F.text.startswith("📧 "), StateFilter(None))
 async def ignore_email_click(message: Message):
-    # This handles clicking on the account name "📧 Forex Outreach" directly
     await message.answer("Use the delete button next to the name to manage this account, or use the menu.")

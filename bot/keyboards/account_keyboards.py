@@ -49,7 +49,7 @@ def accounts_list_keyboard(accounts: list) -> ReplyKeyboardMarkup:
     for acc in accounts:
         keyboard.append([
             KeyboardButton(text=f"📧 {acc.name}"),
-            KeyboardButton(text=f"🗑 Delete {acc.id}")
+            KeyboardButton(text=f"🗑 Delete Acc {acc.id}")
         ])
     
     # Add navigation options
@@ -102,7 +102,7 @@ def confirm_delete_keyboard(account_id: int) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text=f"✅ Yes, Delete {account_id}"),
+                KeyboardButton(text=f"✅ Yes, Delete Acc {account_id}"),
                 KeyboardButton(text="❌ Cancel")
             ]
         ],

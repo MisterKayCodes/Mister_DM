@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from . import Base
 
 class Account(Base):
@@ -12,3 +13,5 @@ class Account(Base):
     delay_max = Column(Integer, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=func.now())
+
+    campaigns = relationship("Campaign", back_populates="account")

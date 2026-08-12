@@ -35,7 +35,7 @@ accounts
 | Column     | Type     | Notes                                       |
 |------------|----------|---------------------------------------------|
 | id         | INTEGER  | Primary key                                 |
-| name       | TEXT     | e.g. "Forex Outreach August"                |
+| name       | TEXT     | Unique. e.g. "Forex Outreach August"        |
 | account_id | INTEGER  | FK → accounts.id                           |
 | status     | TEXT     | draft / running / paused / completed / stopped |
 | created_at | DATETIME | Auto-set on creation                        |

@@ -21,7 +21,7 @@ accounts
 | Column       | Type     | Notes                          |
 |--------------|----------|-------------------------------|
 | id           | INTEGER  | Primary key, auto-increment   |
-| name         | TEXT     | e.g. "Forex Outreach Account" |
+| name         | TEXT     | Unique. e.g. "Forex Outreach Account" |
 | session_path | TEXT     | Path to .session file         |
 | delay_min    | INTEGER  | Minimum delay in minutes      |
 | delay_max    | INTEGER  | Maximum delay in minutes      |

@@ -74,6 +74,13 @@ draft → running → paused → running → completed
 | sent_at     | DATETIME | Null until sent                    |
 | replied_at  | DATETIME | Null until reply detected          |
 
+**Constraint:**
+```sql
+UNIQUE(campaign_id, username)
+```
+> Same username in the same campaign = database rejects it at the insert level.
+> Do NOT rely on Python checks alone — the DB is the last line of defence.
+
 **Status flow:**
 ```
 pending → sent → replied

@@ -10,6 +10,7 @@ from bot.keyboards.account_keyboards import (
     confirm_delete_keyboard
 )
 from services.account_service import AccountService
+from services.telethon_client import verify_session
 from utils.string_utils import generate_safe_filename
 from utils.telegram_utils import safe_html
 
@@ -112,17 +113,56 @@ async def process_delay_max(message: Message, state: FSMContext):
     name = data.get("name")
     session_string = data.get("session_string")
     
+    # Save the max delay in state in case we need to retry validation
+    await state.update_data(delay_max=delay_max)
+    
+    await _validate_and_save_account(message, state, session_string, name, delay_min, delay_max)
+
+@router.message(AddAccountStates.waiting_for_session_retry)
+async def process_session_retry(message: Message, state: FSMContext):
+    session_string = message.text.strip()
+    if not session_string:
+        await message.answer("Session string cannot be empty. Please try again:")
+        return
+        
+    await state.update_data(session_string=session_string)
+    data = await state.get_data()
+    
+    await _validate_and_save_account(
+        message, state, 
+        session_string, data.get("name"), data.get("delay_min"), data.get("delay_max")
+    )
+
+async def _validate_and_save_account(message: Message, state: FSMContext, session_string: str, name: str, delay_min: int, delay_max: int):
+    """Helper to validate session and save account, handling the explicit retry state."""
+    
+    # 1. Validate Session
+    status_msg = await message.answer("⏳ Validating session... Please wait.")
+    
+    is_valid, error_reason = await verify_session(session_string)
+    
+    if not is_valid:
+        await status_msg.edit_text(
+            f"❌ <b>Session validation failed</b>\n\n"
+            f"Reason:\n<code>{error_reason}</code>\n\n"
+            f"Please send another session string:",
+            parse_mode="HTML"
+        )
+        await state.set_state(AddAccountStates.waiting_for_session_retry)
+        return
+        
+    # 2. Save Account
     success, msg = await AccountService.add_account(name, session_string, delay_min, delay_max)
         
     if success:
-        await message.answer(
-            f"✅ Account saved! ({name} | {delay_min}–{delay_max} mins)",
+        await status_msg.edit_text(
+            f"✅ Session verified.\n✅ Account saved! ({name} | {delay_min}–{delay_max} mins)",
             reply_markup=accounts_menu_keyboard()
         )
         await state.clear()
     else:
-        await message.answer(
-            f"❌ Failed: {msg}\nPlease choose a different name or go back:",
+        await status_msg.edit_text(
+            f"❌ Failed to save to database: {msg}\nPlease choose a different name or go back:",
             reply_markup=accounts_menu_keyboard()
         )
         await state.clear()

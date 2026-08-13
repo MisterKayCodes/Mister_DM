@@ -10,6 +10,27 @@ load_dotenv()
 API_ID = os.getenv("TELETHON_API_ID", "12345")
 API_HASH = os.getenv("TELETHON_API_HASH", "dummy_hash")
 
+async def verify_session(session_string: str) -> tuple[bool, str]:
+    """
+    Validates a Telethon session string by connecting and calling get_me().
+    Returns (True, "Valid") or (False, "Error reason").
+    """
+    if not session_string:
+        return False, "Empty session string provided."
+
+    try:
+        client = TelegramClient(StringSession(session_string), int(API_ID), API_HASH)
+        await client.connect()
+        me = await client.get_me()
+        if not me:
+            return False, "AuthKeyUnregistered (or session revoked/banned)."
+        return True, "Valid"
+    except Exception as e:
+        return False, f"Invalid session format or connection error: {str(e) or type(e).__name__}"
+    finally:
+        if 'client' in locals() and client.is_connected():
+            await client.disconnect()
+
 async def send_outreach_message(session_string: str, username: str, message_text: str, dry_run: bool = True) -> bool:
     """
     Sends a message using Telethon. 

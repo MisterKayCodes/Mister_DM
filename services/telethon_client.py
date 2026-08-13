@@ -31,42 +31,45 @@ async def verify_session(session_string: str) -> tuple[bool, str]:
         if 'client' in locals() and client.is_connected():
             await client.disconnect()
 
-async def send_outreach_message(session_string: str, username: str, message_text: str, dry_run: bool = True) -> bool:
+async def send_outreach_message(session_string: str, username: str, message_text: str, dry_run: bool = True) -> tuple[bool, int | None]:
     """
     Sends a message using Telethon. 
-    Returns True on success, False on failure.
+    Returns (True, user_id) on success, (False, None) on failure.
     """
     if dry_run:
         print(f"[DRY RUN] Would send to {username}: {message_text[:30]}...")
-        return True
+        return True, 123456789  # Fake ID for dry run
 
     if not session_string:
         print(f"[TELETHON] Error: Empty session_string provided for {username}.")
-        return False
+        return False, None
 
-    client = TelegramClient(StringSession(session_string), int(API_ID), API_HASH)
-    
     try:
+        client = TelegramClient(StringSession(session_string), int(API_ID), API_HASH)
         await client.connect()
         if not await client.is_user_authorized():
             print(f"[TELETHON] Session is not authorized.")
-            return False
+            return False, None
             
-        await client.send_message(username, message_text)
+        sent_msg = await client.send_message(username, message_text)
         print(f"[TELETHON] Successfully sent message to {username}.")
-        return True
+        
+        # Extract the permanent user ID from the peer object
+        user_id = getattr(sent_msg.peer_id, 'user_id', None)
+        return True, user_id
+        
     except UserPrivacyRestrictedError:
         print(f"[TELETHON] Privacy settings prevent sending to {username}.")
-        return False
+        return False, None
     except FloodWaitError as e:
         print(f"[TELETHON] Flood wait error: must wait {e.seconds} seconds.")
-        # We don't sleep here; we just mark as failed and let the scheduler move on or stop.
-        return False
+        return False, None
     except ValueError as e:
         print(f"[TELETHON] Value error for {username}: {e}")
-        return False
+        return False, None
     except Exception as e:
         print(f"[TELETHON] Unexpected error sending to {username}: {e}")
-        return False
+        return False, None
     finally:
-        await client.disconnect()
+        if 'client' in locals() and client.is_connected():
+            await client.disconnect()

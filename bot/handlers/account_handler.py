@@ -11,6 +11,7 @@ from bot.keyboards.account_keyboards import (
 )
 from services.account_service import AccountService
 from services.telethon_client import verify_session
+from services.reply_listener_service import ReplyListenerService
 from utils.string_utils import generate_safe_filename
 from utils.telegram_utils import safe_html
 
@@ -156,9 +157,13 @@ async def _validate_and_save_account(message: Message, state: FSMContext, sessio
     success, msg = await AccountService.add_account(name, session_string, delay_min, delay_max)
         
     if success:
-        # #FIXED: Deleted old status bubble and switched to message.answer to handle ReplyKeyboardMarkup.
-        # WHAT WOULD HAVE HAPPENED: edit_text would try to attach a smartphone menu keyboard 
-        # to a floating history bubble, causing a fatal Pydantic Type ValidationError crash.
+        # #FIXED: Dynamically spawn background listener.
+        # WHY: When a user creates an account, they shouldn't have to restart the bot to track replies.
+        # We fetch the fresh account from DB to get the assigned ID, then boot its listener instantly.
+        account = await AccountService.get_account_by_name(name)
+        if account:
+            await ReplyListenerService.start_listener(account)
+            
         await status_msg.delete()
         await message.answer(
             f"✅ Session verified.\n✅ Account saved! ({name} | {delay_min}–{delay_max} mins)",
@@ -166,8 +171,6 @@ async def _validate_and_save_account(message: Message, state: FSMContext, sessio
         )
         await state.clear()
     else:
-        # #FIXED: Deleted old status bubble and switched to message.answer to handle ReplyKeyboardMarkup.
-        # WHAT WOULD HAVE HAPPENED: Same as above; editing a chat bubble with main menu reply markup crashes the bot.
         await status_msg.delete()
         await message.answer(
             f"❌ Failed to save to database: {msg}\nPlease choose a different name or go back:",
@@ -228,7 +231,11 @@ async def confirm_delete_handler(message: Message):
     deleted, msg, accounts = await AccountService.delete_account(account_id)
     
     if deleted:
-        await message.answer("✅ Deleted.")
+        # #FIXED: Dynamically kill background listener.
+        # WHY: To prevent memory leaks and zombie Telegram connections running for a deleted account.
+        await ReplyListenerService.stop_listener(account_id)
+        
+        await message.answer(f"✅ Account deleted successfully.")
     else:
         await message.answer(f"❌ Failed to delete account: {msg}")
         

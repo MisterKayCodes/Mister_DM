@@ -5,6 +5,7 @@ from config import BOT_TOKEN
 from data.database import init_db
 from bot.handlers import account_router, campaign_router, template_router, target_router
 from services.campaign_service import CampaignService
+from services.reply_listener_service import ReplyListenerService
 
 async def on_startup(bot: Bot):
     """Executes at the very start of polling."""
@@ -15,12 +16,20 @@ async def on_startup(bot: Bot):
     await CampaignService.recover_running_campaigns()
     print("✅ Startup Recovery: Running campaigns reverted to paused.")
     
+    # Start the reply tracking engine
+    await ReplyListenerService.start_all_listeners()
+    
     # This will now print AFTER all framework info logs are finished
     print("✅ Bot is running!")
 
 async def on_shutdown(bot: Bot):
     """Executes when the bot is stopped."""
     print("\n👋 Shutting down bot session...")
+    
+    # Cleanup all listener tasks
+    for account_id in list(ReplyListenerService.active_listeners.keys()):
+        await ReplyListenerService.stop_listener(account_id)
+        
     await bot.session.close()
     print("👋 Goodbye!")
 

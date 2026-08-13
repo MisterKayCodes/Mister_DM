@@ -71,6 +71,11 @@ class TargetService:
             }
 
     @staticmethod
-    async def update_target_status(target_id: int, new_status: str) -> None:
+    async def update_target_status(target_id: int, new_status: str, telegram_user_id: int | None = None) -> None:
         async with AsyncSessionLocal() as session:
-            await target_repo.update_target_status(session, target_id, new_status)
+            await target_repo.update_target_status(session, target_id, new_status, telegram_user_id)
+
+    @staticmethod
+    async def mark_targets_as_replied(telegram_user_id: int, account_id: int) -> int:
+        async with AsyncSessionLocal() as session:
+            return await target_repo.mark_targets_as_replied(session, telegram_user_id, account_id)

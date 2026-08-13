@@ -1,9 +1,10 @@
 import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import func, delete
+from sqlalchemy import func, delete, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from data.models.target import Target
+from data.models.campaign import Campaign
 from utils.string_utils import clean_username
 
 
@@ -96,12 +97,41 @@ async def get_next_pending_target(session: AsyncSession, campaign_id: int) -> Ta
     )
     return result.scalar_one_or_none()
 
-async def update_target_status(session: AsyncSession, target_id: int, new_status: str) -> None:
-    """Updates a single target's status."""
+#FIXED: Populate missing target metrics during state transitions.
+# WHY: The scheduler needs to stamp exactly when a target was sent and log their permanent ID. 
+# Without `sent_at` and `telegram_user_id`, we can never measure campaign velocity or detect their replies.
+async def update_target_status(session: AsyncSession, target_id: int, new_status: str, telegram_user_id: int | None = None) -> None:
+    """Updates a single target's status, tracking send time and their immutable Telegram user ID."""
     result = await session.execute(
         select(Target).where(Target.id == target_id)
     )
     target = result.scalar_one_or_none()
     if target:
         target.status = new_status
+        if new_status == "sent":
+            target.sent_at = func.now()
+            if telegram_user_id:
+                target.telegram_user_id = telegram_user_id
         await session.commit()
+
+#FIXED: Bulk multi-campaign status updates for replies.
+# WHY: If John is in Campaign A and Campaign B on the same account, loading both into Python to 
+# check and save them is slow. A single bulk SQL update marks them both instantly in one round trip.
+async def mark_targets_as_replied(session: AsyncSession, telegram_user_id: int, account_id: int) -> int:
+    """
+    Marks all 'sent' targets across all campaigns for a specific account as 'replied'.
+    Matches securely on immutable telegram_user_id, not mutable username.
+    Returns the number of rows updated.
+    """
+    subq = select(Campaign.id).where(Campaign.account_id == account_id).scalar_subquery()
+    
+    stmt = (
+        update(Target)
+        .where(Target.telegram_user_id == telegram_user_id)
+        .where(Target.status == "sent")
+        .where(Target.campaign_id.in_(subq))
+        .values(status="replied", replied_at=func.now())
+    )
+    result = await session.execute(stmt)
+    await session.commit()
+    return result.rowcount

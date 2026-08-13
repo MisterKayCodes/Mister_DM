@@ -97,7 +97,10 @@ class SchedulerService:
                 
                 print(f"[SCHEDULER] Processing target {target['username']}...")
                 
-                success = await send_outreach_message(
+                # #FIXED: Handoff immutable target ID for reply tracking.
+                # WHY: send_outreach_message now resolves the immutable telegram_user_id. We must 
+                # save it during the 'sent' state transition so the background listener can match replies.
+                success, resolved_user_id = await send_outreach_message(
                     session_string=account["session_string"],
                     username=target["username"],
                     message_text=message_text,
@@ -105,7 +108,11 @@ class SchedulerService:
                 )
                 
                 new_status = "sent" if success else "failed"
-                await TargetService.update_target_status(target["id"], new_status)
+                await TargetService.update_target_status(
+                    target_id=target["id"], 
+                    new_status=new_status, 
+                    telegram_user_id=resolved_user_id if success else None
+                )
                 
                 # Check soft-pause before sleeping
                 campaign_check = await CampaignService.get_campaign_by_id(campaign_id)

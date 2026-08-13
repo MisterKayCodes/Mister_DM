@@ -3,7 +3,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from config import BOT_TOKEN
 from data.database import init_db
-from bot.handlers import account_router, campaign_router, template_router
+from bot.handlers import account_router, campaign_router, template_router, target_router
 
 async def on_startup(bot: Bot):
     """Executes at the very start of polling."""
@@ -34,6 +34,7 @@ async def main():
     dp.include_router(account_router)
     dp.include_router(campaign_router)
     dp.include_router(template_router)
+    dp.include_router(target_router)
     
     # Register native startup and shutdown lifecycle hooks
     dp.startup.register(on_startup)

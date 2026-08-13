@@ -14,3 +14,4 @@ class Campaign(Base):
 
     account = relationship("Account", back_populates="campaigns")
     templates = relationship("Template", back_populates="campaign", cascade="all, delete-orphan")
+    targets = relationship("Target", back_populates="campaign", cascade="all, delete-orphan")

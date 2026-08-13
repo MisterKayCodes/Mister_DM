@@ -31,6 +31,11 @@
 - Database migration system (Alembic)
 - Unit tests
 
+### Mister (kay) Tool Enhancements — Add to Mister's own backlog
+These are features needed in the `kay` CLI tool itself, not in Mister DM:
+- `kay organize` — takes a mapping config file and restructures project folders automatically, so the AI doesn't waste tokens running multiple shell Move-Item commands manually
+- `kay audit` — reads `ROLES_AND_RULES.md` from a project and scans the codebase for architectural violations (e.g. a bot handler importing `AsyncSessionLocal` directly, a repository opening its own session, etc.)
+
 ---
 
 ## Challenges / Open Questions (Revisit Later)

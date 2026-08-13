@@ -260,7 +260,7 @@ Every time a new session begins on this project:
 kay scan
 
 # 2. Get project state
-kay bundle docs/ROADMAP.md docs/SCHEMA.md docs/MVP_LOCK.md
+kay bundle docs/planning/ROADMAP.md docs/architecture/SCHEMA.md docs/planning/MVP_LOCK.md docs/architecture/ROLES_AND_RULES.md
 
 # 3. Check current phase from ROADMAP.md
 # 4. Continue from where we left off

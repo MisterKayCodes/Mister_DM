@@ -10,10 +10,13 @@ def manage_campaign_keyboard() -> ReplyKeyboardMarkup:
             ],
             [
                 KeyboardButton(text="👥 Add Targets"),
-                KeyboardButton(text="📋 View Targets")
+                KeyboardButton(text="👀 View Targets")
             ],
             [
-                KeyboardButton(text="🗑 Delete Campaign"),
+                KeyboardButton(text="🗑 Clear Targets"),
+                KeyboardButton(text="🗑 Delete Campaign")
+            ],
+            [
                 KeyboardButton(text="⬅️ Back to Campaigns")
             ]
         ],

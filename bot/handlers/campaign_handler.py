@@ -11,6 +11,7 @@ from bot.keyboards.campaign_keyboards import (
 from bot.keyboards.template_keyboards import manage_campaign_keyboard
 from data.repositories.campaign_repo import add_campaign, get_all_campaigns, delete_campaign, get_campaign_by_id
 from data.repositories.account_repo import get_all_accounts
+from data.repositories.target_repo import get_target_count
 from data.database import AsyncSessionLocal
 
 router = Router()
@@ -159,22 +160,25 @@ async def confirm_campaign_delete_handler(message: Message):
 @router.message(F.text.startswith("🎯 ") & ~F.text.in_({"🎯 Campaigns"}))
 async def manage_campaign_click(message: Message, state: FSMContext):
     campaign_name = message.text.replace("🎯 ", "").strip()
-    
+
     async with AsyncSessionLocal() as session:
         campaigns = await get_all_campaigns(session)
-        
-    campaign = next((c for c in campaigns if c.name == campaign_name), None)
-    if not campaign:
-        await message.answer("Campaign not found.")
-        return
-        
-    # Set the current campaign ID in state so the template handler knows which one we're managing
-    await state.update_data(current_campaign_id=campaign.id)
-    
-    # Calculate counts (we can add real counts later when we build targets)
-    templates_count = len(campaign.templates) if campaign.templates else 0
-    targets_count = 0  # Placeholder for Phase 4
-    
+        campaign = next((c for c in campaigns if c.name == campaign_name), None)
+        if not campaign:
+            await message.answer("Campaign not found.")
+            return
+
+        # Set the current campaign ID in state so all child handlers (templates, targets)
+        # know which campaign we are operating inside.
+        await state.update_data(current_campaign_id=campaign.id)
+
+        # We use SELECT COUNT(*) here instead of len(campaign.templates) or len(campaign.targets).
+        # len() would load every single row into Python memory just to count them.
+        # With 50,000 targets, that's 50,000 ORM objects sitting in RAM for a single number.
+        # COUNT(*) returns a single integer and never touches the actual row data.
+        templates_count = len(campaign.templates) if campaign.templates else 0
+        targets_count = await get_target_count(session, campaign.id)
+
     text = (
         f"Managing Campaign:\n**{campaign.name}**\n\n"
         f"Status: {campaign.status.capitalize()}\n\n"
@@ -182,5 +186,5 @@ async def manage_campaign_click(message: Message, state: FSMContext):
         f"Targets: {targets_count}\n"
         f"Replies: Coming Soon\n"
     )
-    
+
     await message.answer(text, reply_markup=manage_campaign_keyboard(), parse_mode="Markdown")

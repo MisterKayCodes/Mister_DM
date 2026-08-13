@@ -11,7 +11,7 @@ from bot.keyboards.account_keyboards import (
 )
 from data.repositories.account_repo import add_account, get_all_accounts, delete_account, get_account_by_id
 from data.database import AsyncSessionLocal
-import re
+from utils.string_utils import generate_safe_filename
 
 router = Router()
 
@@ -100,7 +100,7 @@ async def process_delay_max(message: Message, state: FSMContext):
         return
     
     name = data.get("name")
-    safe_name = re.sub(r'[^a-zA-Z0-9]', '_', name.lower())
+    safe_name = generate_safe_filename(name)
     session_path = f"sessions/{safe_name}.session"
     
     async with AsyncSessionLocal() as session:

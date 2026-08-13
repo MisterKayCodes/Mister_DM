@@ -13,3 +13,4 @@ class Campaign(Base):
     created_at = Column(DateTime, default=func.now())
 
     account = relationship("Account", back_populates="campaigns")
+    templates = relationship("Template", back_populates="campaign", cascade="all, delete-orphan")

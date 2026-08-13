@@ -23,8 +23,11 @@ async def add_campaign(session: AsyncSession, name: str, account_id: int) -> tup
         return False, f"Error creating campaign: {e}"
 
 async def get_all_campaigns(session: AsyncSession) -> list[Campaign]:
-    """Retrieves all campaigns, loading the associated account."""
-    result = await session.execute(select(Campaign).options(selectinload(Campaign.account)))
+    """Retrieves all campaigns, loading the associated account and templates."""
+    result = await session.execute(
+        select(Campaign)
+        .options(selectinload(Campaign.account), selectinload(Campaign.templates))
+    )
     return list(result.scalars().all())
 
 async def get_campaign_by_id(session: AsyncSession, campaign_id: int) -> Campaign | None:

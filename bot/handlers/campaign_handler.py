@@ -8,6 +8,7 @@ from bot.keyboards.campaign_keyboards import (
     campaigns_list_keyboard,
     confirm_campaign_delete_keyboard
 )
+from bot.keyboards.template_keyboards import manage_campaign_keyboard
 from data.repositories.campaign_repo import add_campaign, get_all_campaigns, delete_campaign, get_campaign_by_id
 from data.repositories.account_repo import get_all_accounts
 from data.database import AsyncSessionLocal
@@ -155,6 +156,31 @@ async def confirm_campaign_delete_handler(message: Message):
     # Refresh list
     await list_campaigns_handler(message)
 
-@router.message(F.text.startswith("🎯 "))
-async def ignore_campaign_click(message: Message):
-    await message.answer("Use the delete button next to the name to manage this campaign, or use the menu.")
+@router.message(F.text.startswith("🎯 ") & ~F.text.in_({"🎯 Campaigns"}))
+async def manage_campaign_click(message: Message, state: FSMContext):
+    campaign_name = message.text.replace("🎯 ", "").strip()
+    
+    async with AsyncSessionLocal() as session:
+        campaigns = await get_all_campaigns(session)
+        
+    campaign = next((c for c in campaigns if c.name == campaign_name), None)
+    if not campaign:
+        await message.answer("Campaign not found.")
+        return
+        
+    # Set the current campaign ID in state so the template handler knows which one we're managing
+    await state.update_data(current_campaign_id=campaign.id)
+    
+    # Calculate counts (we can add real counts later when we build targets)
+    templates_count = len(campaign.templates) if campaign.templates else 0
+    targets_count = 0  # Placeholder for Phase 4
+    
+    text = (
+        f"Managing Campaign:\n**{campaign.name}**\n\n"
+        f"Status: {campaign.status.capitalize()}\n\n"
+        f"Templates: {templates_count}\n"
+        f"Targets: {targets_count}\n"
+        f"Replies: Coming Soon\n"
+    )
+    
+    await message.answer(text, reply_markup=manage_campaign_keyboard(), parse_mode="Markdown")

@@ -38,11 +38,10 @@ def campaigns_list_keyboard(campaigns: list) -> ReplyKeyboardMarkup:
     """Campaigns list with delete options."""
     keyboard = []
     
-    # Add each campaign with a delete button in the same row
+    # Add each campaign as a button to manage it
     for camp in campaigns:
         keyboard.append([
-            KeyboardButton(text=f"🎯 {camp.name} | {camp.status}"),
-            KeyboardButton(text=f"🗑 Delete Camp {camp.id}")
+            KeyboardButton(text=f"🎯 {camp.name}")
         ])
     
     # Add navigation options

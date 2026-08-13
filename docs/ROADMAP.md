@@ -76,6 +76,7 @@ git commit -m "phase 4: target import complete"
 - [ ] Pause / Resume / Stop controls work
 - [ ] Campaign auto-marks `completed` when all targets processed
 - [ ] Tested with dry_run=True first, then 2-3 real accounts
+- [ ] Rule: Campaign cannot start unless templates_count > 0 AND targets_count > 0
 
 ```bash
 git commit -m "phase 5: scheduler complete"

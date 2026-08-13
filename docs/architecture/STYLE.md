@@ -173,3 +173,39 @@ that identifies which entity it belongs to.
 **Why:** aiogram's `F.text.startswith()` filter is greedy. If two handlers share
 the same prefix (e.g. both use `🗑 Delete `), one router will intercept
 the other's messages, try to parse the wrong ID, and crash.
+
+---
+
+## 11. Telegram Message Parse Mode — Always Use HTML, Never Raw Markdown
+
+**Rule:** Never use `parse_mode="Markdown"` (MarkdownV1) on messages that contain user-generated content.
+
+**The crash this rule prevents:**
+```
+aiogram.exceptions.TelegramBadRequest:
+Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 165
+```
+
+**Why it happens:** Telegram's MarkdownV1 parser treats underscores as italic markers.
+A username like `john_doe` opens an italic span that never closes — instant crash.
+MarkdownV2 fixes this but requires escaping 18+ special characters, which is fragile.
+
+**The rule:**
+```python
+# ❌ NEVER use raw Markdown when the string contains user data:
+await message.answer(f"Target: {username}", parse_mode="Markdown")
+
+# ✅ Use HTML mode + safe_html() from utils/telegram_utils.py:
+from utils.telegram_utils import safe_html
+await message.answer(f"Target: {safe_html(username)}", parse_mode="HTML")
+
+# ✅ Or omit parse_mode entirely for plain text lists (no formatting needed):
+await message.answer(f"1. {username}\n2. {username2}")
+```
+
+**What `safe_html()` does:** Escapes only `&`, `<`, `>` — the three characters HTML cares about.
+These almost never appear in Telegram usernames or campaign names, making it the safest choice.
+
+**Location:** `utils/telegram_utils.py` also contains `bold()`, `italic()`, and `code()` helpers
+for all HTML-formatted output so you never have to write raw HTML tags in handler code.
+

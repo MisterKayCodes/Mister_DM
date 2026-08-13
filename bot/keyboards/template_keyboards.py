@@ -46,12 +46,13 @@ def templates_list_keyboard(templates: list) -> ReplyKeyboardMarkup:
     # Add each template with a delete button
     # Since templates can be long, we just show "Tpl #ID" on the left 
     # and the delete button on the right
+    #FIXED: Swapped object dot-notation for dictionary key bracket lookups to prevent AttributeError crashes.
     for tpl in templates:
         keyboard.append([
-            KeyboardButton(text=f"📄 Tpl {tpl.id}"),
-            KeyboardButton(text=f"🗑 Delete Tpl {tpl.id}")
+            KeyboardButton(text=f"📄 Tpl {tpl['id']}"),
+            KeyboardButton(text=f"🗑 Delete Tpl {tpl['id']}")
         ])
-    
+
     # Add navigation options
     keyboard.append([
         KeyboardButton(text="⬅️ Back to Campaign"),

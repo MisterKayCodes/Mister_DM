@@ -21,9 +21,9 @@ def select_account_keyboard(accounts: list[Account]) -> ReplyKeyboardMarkup:
     """Keyboard for selecting an account during campaign creation."""
     keyboard = []
     
-    # Add each account as a button
+    # Add each account as a button 
     for acc in accounts:
-        keyboard.append([KeyboardButton(text=f"📧 {acc.name}")])
+        keyboard.append([KeyboardButton(text=f"📧 {acc['name']}")])
         
     # Add cancel button
     keyboard.append([KeyboardButton(text="❌ Cancel Creation")])
@@ -40,8 +40,8 @@ def campaigns_list_keyboard(campaigns: list) -> ReplyKeyboardMarkup:
     
     # Add each campaign as a button to manage it
     for camp in campaigns:
-        # Check if camp is a dict (new structure) or an object (old structure/fallback)
-        name = camp["name"] if isinstance(camp, dict) else camp.name
+        # #FIXED: Enforced strict dictionary lookup since service layers now return serialized payloads natively.
+        name = camp["name"]
         keyboard.append([
             KeyboardButton(text=f"🎯 {name}")
         ])

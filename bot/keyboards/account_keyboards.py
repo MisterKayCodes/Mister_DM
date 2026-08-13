@@ -46,12 +46,14 @@ def accounts_list_keyboard(accounts: list) -> ReplyKeyboardMarkup:
     keyboard = []
     
     # Add each account with a delete button in the same row
+    # #FIXED: Swapped object dot-notation for dictionary key bracket lookups to prevent AttributeError crashes.
     for acc in accounts:
         keyboard.append([
-            KeyboardButton(text=f"📧 {acc.name}"),
-            KeyboardButton(text=f"🗑 Delete Acc {acc.id}")
+            KeyboardButton(text=f"📧 {acc['name']}"),
+            KeyboardButton(text=f"🗑 Delete Acc {acc['id']}")
         ])
-    
+        
+
     # Add navigation options
     keyboard.append([
         KeyboardButton(text="⬅️ Back to Accounts"),
@@ -72,7 +74,7 @@ def accounts_list_simple_keyboard(accounts: list) -> ReplyKeyboardMarkup:
     # Show accounts in rows of 2
     row = []
     for i, acc in enumerate(accounts):
-        row.append(KeyboardButton(text=f"📧 {acc.name}"))
+        row.append(KeyboardButton(text=f"📧 {acc['name']}"))
         if len(row) == 2:  # 2 columns
             keyboard.append(row)
             row = []

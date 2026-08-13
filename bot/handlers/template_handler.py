@@ -32,11 +32,11 @@ async def back_to_campaign_handler(message: Message, state: FSMContext):
 
     # #FIXED: Eliminated repeated "Managing Campaign:" UI string block.
     # WHAT WAS ADJUSTED: Replaced the inline HTML string construction with a call to
-    # `CampaignService.get_campaign_summary_dict` and `build_campaign_summary_text`.
+    # `CampaignService.get_campaign_summary` and `build_campaign_summary_text`.
     # PREVENTED FAILURE: The same string was being built identically in campaign_handler.py,
     # template_handler.py, and target_handler.py. Any future formatting change (new field,
     # emoji update) would require hunting down every copy. One source of truth prevents drift.
-    summary = await CampaignService.get_campaign_summary_dict(campaign_id)
+    summary = await CampaignService.get_campaign_summary(campaign_id)
     if not summary:
         await message.answer("Campaign not found. Returning to campaigns.", reply_markup=campaigns_menu_keyboard())
         return
@@ -73,7 +73,7 @@ async def process_template_content(message: Message, state: FSMContext):
         await state.set_state(None)
         data = await state.get_data()
         campaign_id = data.get("current_campaign_id")
-        summary = await CampaignService.get_campaign_summary_dict(campaign_id)
+        summary = await CampaignService.get_campaign_summary(campaign_id)
         if summary:
             text = build_campaign_summary_text(summary)
             await message.answer(text, reply_markup=manage_campaign_keyboard(), parse_mode="HTML")

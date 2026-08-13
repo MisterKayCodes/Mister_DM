@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import delete
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from data.models.campaign import Campaign
@@ -22,30 +23,42 @@ async def add_campaign(session: AsyncSession, name: str, account_id: int) -> tup
         await session.rollback()
         return False, f"Error creating campaign: {e}"
 
+# #FIXED: Optimize Over-Eager Memory Loading
+# Removed .options(selectinload(Campaign.templates)). The index list handler only needs 
+# core properties. Pulling down the massive array of child templates here introduces severe 
+# memory thrashing. Templates are kept scoped strictly inside single-entity fetches.
 async def get_all_campaigns(session: AsyncSession) -> list[Campaign]:
-    """Retrieves all campaigns, loading the associated account and templates."""
+    """Retrieves all campaigns, loading the associated account."""
     result = await session.execute(
-        select(Campaign)
-        .options(selectinload(Campaign.account), selectinload(Campaign.templates))
+        select(Campaign).options(selectinload(Campaign.account))
     )
     return list(result.scalars().all())
 
 async def get_campaign_by_id(session: AsyncSession, campaign_id: int) -> Campaign | None:
-    """Retrieves a campaign by its ID, loading the associated account."""
+    """Retrieves a campaign by its ID, eagerly loading its templates."""
     result = await session.execute(
-        select(Campaign).options(selectinload(Campaign.account)).where(Campaign.id == campaign_id)
+        select(Campaign).options(selectinload(Campaign.templates)).where(Campaign.id == campaign_id)
     )
     return result.scalar_one_or_none()
 
+async def get_campaign_by_name(session: AsyncSession, name: str) -> Campaign | None:
+    """Retrieves a campaign by its exact name."""
+    result = await session.execute(
+        select(Campaign).where(Campaign.name == name)
+    )
+    return result.scalar_one_or_none()
+
+# #FIXED: Transition to Single-Trip Atomic Deletion
+# Refactored `delete_campaign` to use bulk SQL deletion `delete(Campaign).where(...)`.
+# Eliminates loading the entire campaign ORM model into Python RAM before deletion.
+# Also excised regulatory status guards — the repository is a silent vault and executes 
+# unconditionally. The service layer already guards the state boundary.
 async def delete_campaign(session: AsyncSession, campaign_id: int) -> tuple[bool, str]:
-    """Deletes a campaign by its ID ONLY if status is draft. Returns (success, message)."""
-    campaign = await get_campaign_by_id(session, campaign_id)
-    if not campaign:
-        return False, "Campaign not found."
-        
-    if campaign.status != "draft":
-        return False, f"Cannot delete a campaign with status '{campaign.status}'. Only drafts can be deleted."
-        
-    await session.delete(campaign)
-    await session.commit()
-    return True, "Deleted."
+    """Deletes a campaign by its ID unconditionally. Returns (success, message)."""
+    result = await session.execute(
+        delete(Campaign).where(Campaign.id == campaign_id)
+    )
+    if result.rowcount > 0:
+        await session.commit()
+        return True, "Deleted."
+    return False, "Campaign not found."

@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
 from data.models.template import Template
 
 async def add_template(session: AsyncSession, campaign_id: int, content: str) -> tuple[bool, str]:
@@ -20,6 +21,13 @@ async def get_templates_by_campaign(session: AsyncSession, campaign_id: int) -> 
     """Retrieves all templates for a specific campaign."""
     result = await session.execute(select(Template).where(Template.campaign_id == campaign_id))
     return list(result.scalars().all())
+
+async def get_template_count(session: AsyncSession, campaign_id: int) -> int:
+    """Returns the total number of templates for a campaign."""
+    result = await session.execute(
+        select(func.count()).select_from(Template).where(Template.campaign_id == campaign_id)
+    )
+    return result.scalar() or 0
 
 async def get_template_by_id(session: AsyncSession, template_id: int) -> Template | None:
     """Retrieves a template by its ID."""

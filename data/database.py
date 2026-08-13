@@ -17,6 +17,9 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-async def get_session() -> AsyncSession:
-    async with AsyncSessionLocal() as session:
-        yield session
+# #FIXED: Removed get_session() asynchronous generator.
+# WHAT WAS ADJUSTED: Completely expunged the `get_session()` generator function from this module.
+# PREVENTED FAILURE: Aiogram does not natively tear down request-scoped dependencies. Using loose 
+# generators here invites view components to spawn hanging connection streams, eventually leading 
+# to catastrophic Connection Pool Exhaustion under live load. Services are now strictly forced to 
+# handle session allocations explicitly using atomic context manager blocks via AsyncSessionLocal.

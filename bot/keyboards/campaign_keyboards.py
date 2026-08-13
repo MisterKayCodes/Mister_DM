@@ -40,8 +40,10 @@ def campaigns_list_keyboard(campaigns: list) -> ReplyKeyboardMarkup:
     
     # Add each campaign as a button to manage it
     for camp in campaigns:
+        # Check if camp is a dict (new structure) or an object (old structure/fallback)
+        name = camp["name"] if isinstance(camp, dict) else camp.name
         keyboard.append([
-            KeyboardButton(text=f"🎯 {camp.name}")
+            KeyboardButton(text=f"🎯 {name}")
         ])
     
     # Add navigation options

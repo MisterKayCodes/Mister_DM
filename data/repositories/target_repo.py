@@ -2,11 +2,15 @@ import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func, delete
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from data.models.target import Target
 from utils.string_utils import clean_username
 
 
+# #FIXED: Implement Atomic Batch Insert Plugins & Expunge Looped Flushes
+# Replaced row-by-row session.add() + flush() loop with a single high-performance batch insert.
+# Protects the asyncio event loop thread from network freeze lockups and RAM exhaustion.
+# Also safely computes clean delta deliveries by subtracting rowcount from valid unique list size.
 async def add_targets_bulk(
     session: AsyncSession,
     campaign_id: int,
@@ -15,40 +19,34 @@ async def add_targets_bulk(
     """
     Parses raw text (comma, space, or newline separated), sanitizes each username,
     and bulk-inserts into the database. Returns import statistics.
-
-    We use IntegrityError catching instead of a pre-check SELECT + INSERT pattern.
-    A pre-check SELECT would require two round trips per username and still has a
-    race condition window. Catching the constraint violation is a single atomic
-    operation and is correct even under concurrent load.
     """
     # Split on commas, newlines, and spaces in one pass
     raw_list = re.split(r'[\s,]+', raw_text)
 
-    added = 0
-    duplicates = 0
+    valid_usernames = set()
     invalid = 0
 
     for raw in raw_list:
         if not raw:
             continue
-
         username = clean_username(raw)
         if not username:
             invalid += 1
             continue
+        valid_usernames.add(username)
 
-        try:
-            session.add(Target(campaign_id=campaign_id, username=username))
-            await session.flush()  # flush per-row so we can catch IntegrityError individually
-            added += 1
-        except IntegrityError:
-            await session.rollback()
-            duplicates += 1
-        except Exception:
-            await session.rollback()
-            invalid += 1
+    if not valid_usernames:
+        return {"added": 0, "duplicates": 0, "invalid": invalid}
 
+    insert_data_list = [{"campaign_id": campaign_id, "username": u} for u in valid_usernames]
+
+    stmt = sqlite_insert(Target).values(insert_data_list).on_conflict_do_nothing(index_elements=['campaign_id', 'username'])
+    result = await session.execute(stmt)
     await session.commit()
+
+    added = result.rowcount
+    duplicates = len(valid_usernames) - added
+
     return {"added": added, "duplicates": duplicates, "invalid": invalid}
 
 

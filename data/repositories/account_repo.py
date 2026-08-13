@@ -33,6 +33,11 @@ async def get_account_by_id(session: AsyncSession, account_id: int) -> Account |
     result = await session.execute(select(Account).where(Account.id == account_id))
     return result.scalar_one_or_none()
 
+async def get_account_by_name(session: AsyncSession, name: str) -> Account | None:
+    """Retrieves an account by its exact name."""
+    result = await session.execute(select(Account).where(Account.name == name))
+    return result.scalar_one_or_none()
+
 async def delete_account(session: AsyncSession, account_id: int) -> tuple[bool, str]:
     """Deletes an account by its ID. Returns (success, message)."""
     # Check for campaigns

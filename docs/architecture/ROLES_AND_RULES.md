@@ -124,6 +124,21 @@ database directly and never touches aiogram.
 | Button prefix shared between two routers | `F.text.startswith()` is greedy. Shared prefixes cause one router to steal and crash the other's messages. |
 | Business logic inside a repository | Repositories are dumb. They execute queries. Services decide whether to call them. |
 | Business logic inside a handler | Handlers render UI. Business decisions belong in Services. |
+| Missing `StateFilter(None)` or `StateFilter("*")` on root handlers | Handlers without filters will steal input during active FSM flows, breaking wizards. |
+| Using `parse_mode="Markdown"` on user data | Telegram's MarkdownV1 parser treats underscores as italics. Usernames crash the parser. Use HTML. |
+| Presentation loop logic (e.g. `next(...)`) in Mouth | The Mouth shouldn't know how to query data or handle missing nested relationships. Services provide clean, bounded DTOs. |
+| Two-step UI rendering after mutations | If a handler calls `delete()` then manually calls `get_list()` to render, the UI is out of sync. Actions must return a single atomic signal containing the fresh data. |
+| Inline import inside a handler or callback function | Delays module loading to runtime — import errors become invisible until the exact button is tapped. All imports must live at the top of the file so failures are caught at startup. |
+| Business rule evaluated inside the Mouth (e.g. `if campaign.status != "draft"`) | The handler is making a workflow decision. If the rule changes, every handler that copies the check must be updated. Move the rule into a Service method (e.g. `verify_campaign_modifiable`) that returns a boolean verdict. |
+| Service pre-building HTML presentation strings | Services must be format-agnostic. If a Service builds a Telegram HTML string, it cannot be reused for logs, exports, or other channels. Services return raw data objects or dicts; the Mouth renders them. |
+| Duplicate UI string blocks across multiple handlers | If the same "Managing Campaign:" summary block is built in 3 handlers separately, any formatting change requires 3 edits. Centralise repeated layout strings in a Service method or a Mouth helper function. |
+| Calling a handler function from inside another handler | Creates tight coupling. If the called handler changes its signature, every caller breaks silently. Use atomic Service returns or inline the logic directly. |
+| Synchronous file decoding in handlers (e.g. `file.read()`) | Blocks the main asyncio event loop, freezing the bot for all concurrent users if the file is large. Pass bytes to Services and decode inside `asyncio.to_thread()`. |
+| Exposing raw ORM entities to the Mouth | If a Service returns a raw SQLAlchemy model to a handler, the handler might trigger lazy-loads outside the session, causing `DetachedInstanceError`. It also binds the UI directly to the DB schema. Services must map models to plain Python dictionaries (or pure DTOs) before returning. |
+| Over-eager memory loading (`selectinload` on index lists) | Pulling massive arrays of child models (e.g. templates) while fetching a bulk parent index list introduces severe memory thrashing. Keep relational loads strictly scoped inside single-entity fetches (e.g., `get_by_id`). |
+| Loading entire ORM models into RAM before deleting | Inefficient network usage. Execute clean bulk SQL deletion using `session.execute(delete(Model).where(...))` for single-trip atomic deletion. |
+| Row-by-row `session.add()` + `flush()` loop | Thrashes connection pools, drops cache, and introduces severe latency blocks. Parse to unique dicts and execute atomic batch plugins (e.g., `sqlite_insert(Model).values(...).on_conflict_do_nothing()`). |
+
 
 ---
 

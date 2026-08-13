@@ -7,15 +7,16 @@ from bot.states.target_states import AddTargetStates
 from bot.keyboards.target_keyboards import import_method_keyboard, confirm_clear_keyboard
 from bot.keyboards.template_keyboards import manage_campaign_keyboard
 from bot.keyboards.navigation_keyboards import back_and_home_inline
-from data.repositories.target_repo import (
-    add_targets_bulk,
-    get_targets_by_campaign,
-    get_target_count,
-    clear_targets
-)
-from data.repositories.campaign_repo import get_campaign_by_id
-from data.database import AsyncSessionLocal
+
+# #FIXED: Removed inline import of main_menu_keyboard from inside nav_home_callback.
+# WHAT WOULD HAVE HAPPENED: Inline imports inside callback handlers delay module loading
+# to runtime, making import errors invisible until the button is tapped. Moving the import
+# to the top of the file ensures failures are caught at startup, not mid-session.
+from bot.keyboards.account_keyboards import main_menu_keyboard
+
 from bot.keyboards.campaign_keyboards import campaigns_menu_keyboard
+from services.target_service import TargetService
+from services.campaign_service import CampaignService
 from utils.telegram_utils import safe_html
 
 router = Router()
@@ -27,13 +28,8 @@ router = Router()
 async def _get_draft_campaign(message: Message, state: FSMContext):
     """
     Central guard for all target modification handlers.
-    Fetches the current campaign and enforces the draft-only rule.
-
-    We do this in one place instead of copy-pasting the status check into every handler.
-    The rule: only draft campaigns can be modified. If the scheduler is already
-    running (status = running/paused), adding or clearing targets would mutate
-    the dataset mid-flight, which introduces race conditions where the scheduler
-    could skip or double-send targets.
+    Asks the Nerves (CampaignService) for a modifiability verdict.
+    The Mouth receives a boolean and a status string — it never reads campaign.status itself.
     """
     data = await state.get_data()
     campaign_id = data.get("current_campaign_id")
@@ -41,26 +37,24 @@ async def _get_draft_campaign(message: Message, state: FSMContext):
         await message.answer("Lost context. Go back to the campaign list.", reply_markup=campaigns_menu_keyboard())
         return None
 
-    async with AsyncSessionLocal() as session:
-        campaign = await get_campaign_by_id(session, campaign_id)
+    # #FIXED: Decoupled status guard logic from the Mouth layer.
+    # WHAT WAS ADJUSTED: Replaced `campaign.status != "draft"` evaluated inside the handler
+    # with a call to `CampaignService.verify_campaign_modifiable`.
+    # PREVENTED FAILURE: Business workflow rules (what counts as "modifiable") no longer live
+    # in the presentation layer. If the rule changes (e.g. "paused" campaigns become editable),
+    # only the Service needs to change — not every handler that guards targets.
+    can_modify, status, campaign = await CampaignService.verify_campaign_modifiable(campaign_id)
 
-    if not campaign:
-        await message.answer("Campaign not found.")
-        return None
-
-    if campaign.status != "draft":
-        # #FIXED: Switched from parse_mode="Markdown" to parse_mode="HTML" for messages
-        # containing user-generated content (campaign names, statuses).
-        # WHAT WOULD HAVE HAPPENED: Campaign names with underscores (e.g. "august_forex")
-        # cause Telegram's MarkdownV1 parser to crash with:
-        # "Can't find end of the entity starting at byte offset X"
-        # because underscores are treated as italic markers in Markdown.
-        await message.answer(
-            f"❌ Cannot modify targets. Campaign is <b>{safe_html(campaign.status)}</b>.\n"
-            "Only draft campaigns can be modified.",
-            reply_markup=manage_campaign_keyboard(),
-            parse_mode="HTML"
-        )
+    if not can_modify:
+        if status == "not_found":
+            await message.answer("Campaign not found.")
+        else:
+            await message.answer(
+                f"❌ Cannot modify targets. Campaign is <b>{safe_html(status)}</b>.\n"
+                "Only draft campaigns can be modified.",
+                reply_markup=manage_campaign_keyboard(),
+                parse_mode="HTML"
+            )
         return None
 
     return campaign
@@ -88,7 +82,6 @@ async def nav_back_callback(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "nav_home")
 async def nav_home_callback(callback: CallbackQuery, state: FSMContext):
     """Handles the inline 🏠 Main Menu button. Clears state and returns to the main menu."""
-    from bot.keyboards.account_keyboards import main_menu_keyboard
     await state.clear()
     await callback.message.answer("🏠 Main Menu", reply_markup=main_menu_keyboard())
     await callback.answer()
@@ -146,15 +139,16 @@ async def process_text_paste(message: Message, state: FSMContext):
 
     await message.answer("⏳ Processing...")
 
-    async with AsyncSessionLocal() as session:
-        stats = await add_targets_bulk(session, campaign_id, message.text)
+    stats = await TargetService.add_targets_bulk(campaign_id, message.text)
 
     await state.set_state(None)
-    # #FIXED: Switched from parse_mode="Markdown" to parse_mode="HTML".
-    # WHAT WOULD HAVE HAPPENED: Import results with no special characters work fine,
-    # but the pattern is unsafe. Any future change that adds a username or campaign name
-    # to this message would instantly crash the Markdown parser on underscores.
-    # Using HTML mode consistently is the safe default for all bot output.
+
+    # #FIXED: Firewall text preparation — Mouth builds the HTML layout block locally.
+    # WHAT WAS ADJUSTED: The Service returns a clean dict `{added, duplicates, invalid}`.
+    # The Mouth is responsible for assembling the final display string from that dict.
+    # PREVENTED FAILURE: If the Service pre-built the string, it would need to know about
+    # Telegram HTML format, parse_mode, and emojis — coupling the Nerves to a presentation
+    # framework. The dict keeps the Service format-agnostic (works for Telegram, logs, APIs).
     await message.answer(
         f"✅ <b>Import Complete</b>\n\n"
         f"• Added: {stats['added']}\n"
@@ -202,15 +196,18 @@ async def process_file_upload(message: Message, state: FSMContext):
 
     await message.answer("⏳ Processing file...")
 
-    # Download the file content into memory as bytes, then decode to string.
+    # Download the file content into memory as bytes.
     # We never write the file to disk — there's no need, and disk writes add
     # latency, permission issues, and cleanup complexity.
     file = await message.bot.get_file(message.document.file_id)
     file_bytes = await message.bot.download_file(file.file_path)
-    raw_text = file_bytes.read().decode("utf-8", errors="ignore")
 
-    async with AsyncSessionLocal() as session:
-        stats = await add_targets_bulk(session, campaign_id, raw_text)
+    # #FIXED: Prevent event loop freezes
+    # WHAT WAS ADJUSTED: Moved the `.read().decode()` logic into the Service layer's 
+    # `process_file_bytes` method, which executes it asynchronously in a background thread.
+    # PREVENTED FAILURE: Completely halts asynchronous execution loops for all concurrent 
+    # users when large files are loaded directly in the main thread.
+    stats = await TargetService.process_file_bytes(campaign_id, file_bytes)
 
     await state.set_state(None)
     await message.answer(
@@ -235,8 +232,11 @@ async def view_targets_handler(message: Message, state: FSMContext):
         await message.answer("Lost context.", reply_markup=campaigns_menu_keyboard())
         return
 
-    async with AsyncSessionLocal() as session:
-        targets = await get_targets_by_campaign(session, campaign_id)
+    # #FIXED: Purge Model Destructuring
+    # WHAT WAS ADJUSTED: Requested a list of dicts from the Service layer instead of raw DB models.
+    # PREVENTED FAILURE: The Mouth no longer unboxes ORM objects or reads properties like `.username`.
+    # It just loops over standard python dicts for safety and format agility.
+    targets = await TargetService.get_targets_by_campaign(campaign_id)
 
     if not targets:
         await message.answer("No targets imported yet.", reply_markup=manage_campaign_keyboard())
@@ -258,7 +258,7 @@ async def view_targets_handler(message: Message, state: FSMContext):
     # It crashes with: "Can't find end of the entity starting at byte offset X"
     # because "john_doe" opens an italic span that never closes.
     # Plain text is safe for lists of usernames. HTML is used only where we need bold/italic.
-    preview_lines = [f"{i+1}. {t.username} ({t.status})" for i, t in enumerate(preview)]
+    preview_lines = [f"{i+1}. {t['username']} ({t['status']})" for i, t in enumerate(preview)]
     text = f"📋 Targets ({total} total):\n\n" + "\n".join(preview_lines)
 
     if total > 20:
@@ -269,7 +269,7 @@ async def view_targets_handler(message: Message, state: FSMContext):
     if total > 20:
         # Build the full list as a text file and send it directly in the chat.
         # No disk writes needed — we build it in memory using BufferedInputFile.
-        full_lines = [f"{t.username} ({t.status})" for t in targets]
+        full_lines = [f"{t['username']} ({t['status']})" for t in targets]
         file_content = "\n".join(full_lines).encode("utf-8")
         await message.answer_document(
             document=BufferedInputFile(file_content, filename="targets_export.txt"),
@@ -287,8 +287,7 @@ async def clear_targets_prompt(message: Message, state: FSMContext):
     if not campaign:
         return
 
-    async with AsyncSessionLocal() as session:
-        count = await get_target_count(session, campaign.id)
+    count = await TargetService.get_target_count(campaign.id)
 
     await message.answer(
         f"⚠️ Are you sure you want to delete all <b>{count}</b> targets from this campaign?\n"
@@ -306,8 +305,7 @@ async def confirm_clear_targets(message: Message, state: FSMContext):
         await message.answer("Lost context.", reply_markup=campaigns_menu_keyboard())
         return
 
-    async with AsyncSessionLocal() as session:
-        deleted_count = await clear_targets(session, campaign_id)
+    deleted_count = await TargetService.clear_targets(campaign_id)
 
     await message.answer(
         f"✅ Cleared {deleted_count} targets.",

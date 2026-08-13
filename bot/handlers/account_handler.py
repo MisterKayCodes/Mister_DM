@@ -9,9 +9,9 @@ from bot.keyboards.account_keyboards import (
     accounts_list_keyboard,
     confirm_delete_keyboard
 )
-from data.repositories.account_repo import add_account, get_all_accounts, delete_account, get_account_by_id
-from data.database import AsyncSessionLocal
+from services.account_service import AccountService
 from utils.string_utils import generate_safe_filename
+from utils.telegram_utils import safe_html
 
 router = Router()
 
@@ -103,8 +103,7 @@ async def process_delay_max(message: Message, state: FSMContext):
     safe_name = generate_safe_filename(name)
     session_path = f"sessions/{safe_name}.session"
     
-    async with AsyncSessionLocal() as session:
-        success, msg = await add_account(session, name, session_path, delay_min, delay_max)
+    success, msg = await AccountService.add_account(name, session_path, delay_min, delay_max)
         
     if success:
         await message.answer(
@@ -125,8 +124,7 @@ async def process_delay_max(message: Message, state: FSMContext):
 
 @router.message(F.text == "📋 List Accounts", StateFilter(None))
 async def list_accounts_handler(message: Message):
-    async with AsyncSessionLocal() as session:
-        accounts = await get_all_accounts(session)
+    accounts = await AccountService.get_all_accounts()
     
     text = "📋 Your Accounts:" if accounts else "No accounts found."
     await message.answer(text, reply_markup=accounts_list_keyboard(accounts))
@@ -142,25 +140,26 @@ async def delete_account_prompt(message: Message):
         await message.answer("Invalid account ID format.")
         return
 
-    async with AsyncSessionLocal() as session:
-        account = await get_account_by_id(session, account_id)
+    account = await AccountService.get_account_by_id(account_id)
         
     if not account:
         await message.answer("Account not found.")
         return
         
     await message.answer(
-        f"Are you sure you want to delete **{account.name}**? This cannot be undone.",
+        f"Are you sure you want to delete <b>{safe_html(account.name)}</b>? This cannot be undone.",
         reply_markup=confirm_delete_keyboard(account_id),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 # #FIXED: Merged the delete database operation and the accounts-refresh call into a single `async with` context block.
 # WHAT WOULD HAVE HAPPENED: Opening and closing two independent sessions inside a fraction of a second 
 # introduces connection pool thrashing and could result in transactional race conditions or SQLite database locks.
-# #FIXED: Changed filter from "✅ Yes, Delete " to "✅ Yes, Delete Acc " to prevent collision with Campaign confirm buttons.
-# WHAT WOULD HAVE HAPPENED: If a user clicked "✅ Yes, Delete Camp 1", this handler would intercept it,
-# try to parse "Camp 1" as an integer, and crash with an "Invalid account ID format" error.
+# #FIXED: Upgraded confirm_delete_handler to prevent multi-call coordination mutations inside the Mouth.
+# WHAT WOULD HAVE HAPPENED: If the handler invoked `AccountService.delete_account` and then immediately 
+# called `AccountService.get_all_accounts`, it creates a race condition where the UI layer (the Mouth) 
+# is orchestrating state tracking. By returning `(success, msg, fresh_accounts_list)` atomically from 
+# the Service (the Nerves), we guarantee the returned state perfectly matches the database transaction boundary.
 @router.message(F.text.startswith("✅ Yes, Delete Acc "), StateFilter(None))
 async def confirm_delete_handler(message: Message):
     try:
@@ -169,15 +168,12 @@ async def confirm_delete_handler(message: Message):
         await message.answer("Invalid account ID format.")
         return
 
-    async with AsyncSessionLocal() as session:
-        deleted, msg = await delete_account(session, account_id)
-        
-        if deleted:
-            await message.answer("✅ Deleted.")
-        else:
-            await message.answer(f"❌ Failed to delete account: {msg}")
-            
-        accounts = await get_all_accounts(session)
+    deleted, msg, accounts = await AccountService.delete_account(account_id)
+    
+    if deleted:
+        await message.answer("✅ Deleted.")
+    else:
+        await message.answer(f"❌ Failed to delete account: {msg}")
         
     text = "📋 Your Accounts:" if accounts else "No accounts found."
     await message.answer(text, reply_markup=accounts_list_keyboard(accounts))
@@ -188,8 +184,7 @@ async def confirm_delete_handler(message: Message):
 # the click entirely, freezing the user out of canceling their execution.
 @router.message(F.text.startswith("❌ Cancel"), StateFilter(None))
 async def cancel_delete_handler(message: Message):
-    async with AsyncSessionLocal() as session:
-        accounts = await get_all_accounts(session)
+    accounts = await AccountService.get_all_accounts()
         
     text = "📋 Your Accounts:" if accounts else "No accounts found."
     await message.answer(text, reply_markup=accounts_list_keyboard(accounts))

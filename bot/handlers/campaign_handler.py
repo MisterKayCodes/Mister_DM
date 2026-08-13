@@ -12,6 +12,7 @@ from bot.keyboards.campaign_keyboards import (
 from bot.keyboards.template_keyboards import manage_campaign_keyboard
 from services.campaign_service import CampaignService
 from services.account_service import AccountService
+from services.scheduler_service import SchedulerService
 from utils.telegram_utils import safe_html
 from bot.utils.ui_layouts import build_campaign_summary_text
 
@@ -33,10 +34,12 @@ def _build_campaigns_list_text(campaigns: list[dict]) -> str:
         text += f"Created: {camp['created_at_str']}\n\n"
     return text
 
+# ==========================================
+# NAVIGATION
+# ==========================================
+
 # #FIXED: Firewall the Presentation Layer
-# WHAT WAS ADJUSTED: Added StateFilter("*") to the entry navigation handler.
-# PREVENTED FAILURE: Users can now break out of an active FSM flow safely. Without this,
-# tapping "🎯 Campaigns" mid-wizard would be swallowed as input string instead of navigating.
+# Added StateFilter("*") so users can escape an active FSM flow safely.
 @router.message(F.text.in_({"🎯 Campaigns", "⬅️ Back to Campaigns"}), StateFilter("*"))
 async def campaigns_menu_handler(message: Message, state: FSMContext):
     await state.clear()
@@ -44,6 +47,10 @@ async def campaigns_menu_handler(message: Message, state: FSMContext):
         "🎯 Campaigns Menu\nManage your outreach campaigns.",
         reply_markup=campaigns_menu_keyboard()
     )
+
+# ==========================================
+# ADD CAMPAIGN WIZARD (FSM)
+# ==========================================
 
 @router.message(F.text == "➕ Add Campaign", StateFilter("*"))
 async def add_campaign_start(message: Message, state: FSMContext):
@@ -83,11 +90,8 @@ async def process_campaign_account(message: Message, state: FSMContext):
         
     account_name = text.replace("📧 ", "").strip()
     
-    # #FIXED: Seal Logic Leakage (No Data Lookups)
-    # WHAT WAS ADJUSTED: Replaced an in-memory generator loop `next(a for a in accounts)` 
-    # with a direct Service call `AccountService.get_account_by_name`.
-    # PREVENTED FAILURE: The Mouth no longer fetches the entire database table into Python 
-    # RAM just to find one row. Lookups happen efficiently in the DB layer.
+    # #FIXED: Seal Logic Leakage (No Data Lookups in the Mouth)
+    # Service call resolves the account — Mouth does not iterate lists.
     account = await AccountService.get_account_by_name(account_name)
     if not account:
         await message.answer("Account not found. Please try again.")
@@ -96,11 +100,11 @@ async def process_campaign_account(message: Message, state: FSMContext):
     data = await state.get_data()
     campaign_name = data.get("name")
     
-    success, msg = await CampaignService.add_campaign(campaign_name, account.id)
+    success, msg = await CampaignService.add_campaign(campaign_name, account["id"])
         
     if success:
         await message.answer(
-            f"✅ Campaign '{campaign_name}' created as [draft].\nAssigned to: {account.name}",
+            f"✅ Campaign '{campaign_name}' created as [draft].\nAssigned to: {account['name']}",
             reply_markup=campaigns_menu_keyboard()
         )
         await state.clear()
@@ -111,20 +115,105 @@ async def process_campaign_account(message: Message, state: FSMContext):
         )
         await state.clear()
 
+# ==========================================
+# CAMPAIGN LIST & MANAGEMENT
+# ==========================================
+
 # #FIXED: Separate Core and Presentation Data Formatting
-# WHAT WAS ADJUSTED: Removed the pre-compiled HTML string return from CampaignService.
-# The Service now returns `list[dict]`. The Mouth iterates those dicts to draw the HTML block.
-# PREVENTED FAILURE: Services must remain format-agnostic. Returning HTML from a Service
-# prevents that Service from being reused for logs or future API endpoints.
+# Service returns list[dict]. The Mouth renders HTML via _build_campaigns_list_text().
 @router.message(F.text == "📋 List Campaigns", StateFilter("*"))
 async def list_campaigns_handler(message: Message):
-    campaigns = await CampaignService.get_all_campaigns_as_dicts()
+    campaigns = await CampaignService.get_all_campaigns()
     text = _build_campaigns_list_text(campaigns)
-    # The keyboard expects the 'campaigns' list for button generation. Since we need .name, 
-    # and the dict has 'name', it will work if campaigns_list_keyboard expects objects or dicts.
-    # WAIT: campaigns_list_keyboard expects objects that have .name. We should pass the dicts to it, 
-    # but the keyboard code currently uses `camp.name`. We will fix the keyboard to accept dicts.
     await message.answer(text, reply_markup=campaigns_menu_keyboard() if not campaigns else campaigns_list_keyboard(campaigns), parse_mode="HTML")
+
+# #FIXED: Seal Logic Leakage (No Data Lookups in the Mouth)
+# Replaced in-memory generator loop with direct Service call.
+@router.message(F.text.startswith("🎯 ") & ~F.text.in_({"🎯 Campaigns"}), StateFilter("*"))
+async def manage_campaign_click(message: Message, state: FSMContext):
+    campaign_name = message.text.replace("🎯 ", "").strip()
+
+    campaign = await CampaignService.get_campaign_by_name(campaign_name)
+    if not campaign:
+        await message.answer("Campaign not found.")
+        return
+
+    # Store current campaign ID in FSM state so child handlers (templates, targets, controls) know context
+    await state.update_data(current_campaign_id=campaign["id"])
+
+    # #FIXED: Reclaim summary metadata rendering
+    # Service returns a dict. Mouth renders it via build_campaign_summary_text().
+    summary = await CampaignService.get_campaign_summary(campaign["id"])
+    if not summary:
+        await message.answer("Campaign not found.")
+        return
+
+    text = build_campaign_summary_text(summary)
+    await message.answer(text, reply_markup=manage_campaign_keyboard(campaign["status"]), parse_mode="HTML")
+
+# ==========================================
+# SCHEDULER CONTROLS (Start / Pause / Stop)
+# ==========================================
+
+#FIXED: Remove hardcoded status leakage from the Mouth.
+# WHAT WAS ADJUSTED: Removed hardcoded "running" string from manage_campaign_keyboard() argument.
+# PREVENTED FAILURE: The Mouth was assuming the new status instead of reading the true DB state.
+# SchedulerService now returns (success, msg, actual_status). The Mouth passes that status to the
+# keyboard builder — it never guesses or caches what the status should be.
+@router.message(F.text == "▶ Start Campaign", StateFilter("*"))
+async def start_campaign_handler(message: Message, state: FSMContext):
+    data = await state.get_data()
+    campaign_id = data.get("current_campaign_id")
+    if not campaign_id:
+        await message.answer("No campaign selected. Go back and select a campaign.")
+        return
+    
+    success, msg, actual_status = await SchedulerService.start_campaign(campaign_id)
+    
+    if success:
+        await message.answer(f"▶ {msg}", reply_markup=manage_campaign_keyboard(actual_status))
+    else:
+        await message.answer(f"❌ Cannot start: {msg}", reply_markup=manage_campaign_keyboard(actual_status))
+
+#FIXED: Remove hardcoded status leakage from the Mouth.
+# WHAT WAS ADJUSTED: Removed hardcoded "paused" string from manage_campaign_keyboard() argument.
+# PREVENTED FAILURE: Same class of violation as start handler — status must be read from service payload.
+@router.message(F.text == "⏸ Pause Campaign", StateFilter("*"))
+async def pause_campaign_handler(message: Message, state: FSMContext):
+    data = await state.get_data()
+    campaign_id = data.get("current_campaign_id")
+    if not campaign_id:
+        await message.answer("No campaign selected.")
+        return
+    
+    success, msg, actual_status = await SchedulerService.pause_campaign(campaign_id)
+    
+    if success:
+        await message.answer(f"⏸ {msg}", reply_markup=manage_campaign_keyboard(actual_status))
+    else:
+        await message.answer(f"❌ {msg}", reply_markup=manage_campaign_keyboard(actual_status))
+
+#FIXED: Remove hardcoded status leakage from the Mouth.
+# WHAT WAS ADJUSTED: Removed hardcoded "stopped" string from manage_campaign_keyboard() argument.
+# PREVENTED FAILURE: Same class of violation — keyboard status driven entirely by DB truth, not assumptions.
+@router.message(F.text == "🛑 Stop Campaign", StateFilter("*"))
+async def stop_campaign_handler(message: Message, state: FSMContext):
+    data = await state.get_data()
+    campaign_id = data.get("current_campaign_id")
+    if not campaign_id:
+        await message.answer("No campaign selected.")
+        return
+    
+    success, msg, actual_status = await SchedulerService.stop_campaign(campaign_id)
+    
+    if success:
+        await message.answer(f"🛑 {msg}", reply_markup=manage_campaign_keyboard(actual_status))
+    else:
+        await message.answer(f"❌ {msg}", reply_markup=manage_campaign_keyboard(actual_status))
+
+# ==========================================
+# DELETE CAMPAIGN
+# ==========================================
 
 @router.message(F.text.startswith("🗑 Delete Camp "), StateFilter("*"))
 async def delete_campaign_prompt(message: Message):
@@ -135,10 +224,7 @@ async def delete_campaign_prompt(message: Message):
         return
 
     # #FIXED: Migrate the delete status guard down into the Service layer.
-    # WHAT WAS ADJUSTED: Evaluated `if campaign.status != "draft"` inside the Mouth was replaced
-    # by `CampaignService.verify_campaign_deletable`.
-    # PREVENTED FAILURE: The handler was making workflow decisions. The Mouth should only
-    # echo the verdict.
+    # The Mouth receives the verdict — it does not evaluate status logic.
     can_delete, status = await CampaignService.verify_campaign_deletable(campaign_id)
         
     if not can_delete:
@@ -148,20 +234,16 @@ async def delete_campaign_prompt(message: Message):
             await message.answer(f"Cannot delete a campaign with status '{status}'. Only drafts can be deleted.")
         return
         
-    # Re-fetch the campaign name to display it in the confirmation prompt. 
-    # We use get_campaign_by_id here because we need the name for display.
     campaign = await CampaignService.get_campaign_by_id(campaign_id)
     if campaign:
         await message.answer(
-            f"Are you sure you want to delete campaign <b>{safe_html(campaign.name)}</b>? This cannot be undone.",
+            f"Are you sure you want to delete campaign <b>{safe_html(campaign['name'])}</b>? This cannot be undone.",
             reply_markup=confirm_campaign_delete_keyboard(campaign_id),
             parse_mode="HTML"
         )
 
 # #FIXED: Atomic Single-Signal Return for Actions
-# WHAT WAS ADJUSTED: `delete_campaign` now returns the fresh `list[dict]` directly.
-# PREVENTED FAILURE: We no longer call `list_campaigns_handler(message)` manually to refresh the list,
-# preventing split-brain state issues where the DB changed but the view fetched stale data.
+# delete_campaign returns the fresh list[dict] directly — no secondary fetch needed.
 @router.message(F.text.startswith("✅ Yes, Delete Camp "), StateFilter("*"))
 async def confirm_campaign_delete_handler(message: Message):
     try:
@@ -179,32 +261,3 @@ async def confirm_campaign_delete_handler(message: Message):
         
     text = _build_campaigns_list_text(fresh_campaigns)
     await message.answer(text, reply_markup=campaigns_menu_keyboard() if not fresh_campaigns else campaigns_list_keyboard(fresh_campaigns), parse_mode="HTML")
-
-# #FIXED: Seal Logic Leakage (No Data Lookups)
-# WHAT WAS ADJUSTED: Replaced the in-memory generator loop `next(...)` with a direct 
-# Service call `CampaignService.get_campaign_by_name`.
-# PREVENTED FAILURE: Keeps the presentation layer dumb. The Mouth shouldn't know how 
-# to query data, it should just ask the Nerves for it.
-@router.message(F.text.startswith("🎯 ") & ~F.text.in_({"🎯 Campaigns"}), StateFilter("*"))
-async def manage_campaign_click(message: Message, state: FSMContext):
-    campaign_name = message.text.replace("🎯 ", "").strip()
-
-    campaign = await CampaignService.get_campaign_by_name(campaign_name)
-    if not campaign:
-        await message.answer("Campaign not found.")
-        return
-
-    # Set the current campaign ID in state so all child handlers (templates, targets)
-    # know which campaign we are operating inside.
-    await state.update_data(current_campaign_id=campaign.id)
-
-    # #FIXED: Reclaim summary metadata rendering
-    # WHAT WAS ADJUSTED: Replaced `format_campaign_summary_text` with `get_campaign_summary_dict`.
-    # PREVENTED FAILURE: Service no longer returns HTML. The Mouth gets a dict and formats it via `build_campaign_summary_text()`.
-    summary = await CampaignService.get_campaign_summary_dict(campaign.id)
-    if not summary:
-        await message.answer("Campaign not found.")
-        return
-
-    text = build_campaign_summary_text(summary)
-    await message.answer(text, reply_markup=manage_campaign_keyboard(), parse_mode="HTML")

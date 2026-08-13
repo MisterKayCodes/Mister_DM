@@ -62,3 +62,21 @@ async def delete_campaign(session: AsyncSession, campaign_id: int) -> tuple[bool
         await session.commit()
         return True, "Deleted."
     return False, "Campaign not found."
+
+async def update_campaign_status(session: AsyncSession, campaign_id: int, new_status: str) -> None:
+    """Updates the status of a specific campaign."""
+    campaign = await get_campaign_by_id(session, campaign_id)
+    if campaign:
+        campaign.status = new_status
+        await session.commit()
+
+async def recover_running_campaigns(session: AsyncSession) -> None:
+    """Finds all 'running' campaigns and sets them to 'paused' on bot startup."""
+    result = await session.execute(
+        select(Campaign).where(Campaign.status == "running")
+    )
+    campaigns = result.scalars().all()
+    for campaign in campaigns:
+        campaign.status = "paused"
+    if campaigns:
+        await session.commit()

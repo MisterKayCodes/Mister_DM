@@ -67,6 +67,16 @@ async def process_account_name(message: Message, state: FSMContext):
         await message.answer("Name cannot be empty. Please enter a valid name:")
         return
     await state.update_data(name=name)
+    await message.answer("Please paste the Telethon StringSession for this account:")
+    await state.set_state(AddAccountStates.waiting_for_session_string)
+
+@router.message(AddAccountStates.waiting_for_session_string)
+async def process_session_string(message: Message, state: FSMContext):
+    session_string = message.text.strip()
+    if not session_string:
+        await message.answer("Session string cannot be empty. Please try again:")
+        return
+    await state.update_data(session_string=session_string)
     await message.answer("Minimum delay between messages (in minutes):")
     await state.set_state(AddAccountStates.waiting_for_delay_min)
 
@@ -100,14 +110,13 @@ async def process_delay_max(message: Message, state: FSMContext):
         return
     
     name = data.get("name")
-    safe_name = generate_safe_filename(name)
-    session_path = f"sessions/{safe_name}.session"
+    session_string = data.get("session_string")
     
-    success, msg = await AccountService.add_account(name, session_path, delay_min, delay_max)
+    success, msg = await AccountService.add_account(name, session_string, delay_min, delay_max)
         
     if success:
         await message.answer(
-            f"✅ Account saved! ({name} | {delay_min}–{delay_max} mins)\nSession path: {session_path}",
+            f"✅ Account saved! ({name} | {delay_min}–{delay_max} mins)",
             reply_markup=accounts_menu_keyboard()
         )
         await state.clear()

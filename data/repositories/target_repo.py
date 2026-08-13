@@ -86,3 +86,22 @@ async def clear_targets(session: AsyncSession, campaign_id: int) -> int:
     )
     await session.commit()
     return result.rowcount
+
+async def get_next_pending_target(session: AsyncSession, campaign_id: int) -> Target | None:
+    """Fetches the next target with status='pending' for the scheduler."""
+    result = await session.execute(
+        select(Target)
+        .where(Target.campaign_id == campaign_id, Target.status == "pending")
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+async def update_target_status(session: AsyncSession, target_id: int, new_status: str) -> None:
+    """Updates a single target's status."""
+    result = await session.execute(
+        select(Target).where(Target.id == target_id)
+    )
+    target = result.scalar_one_or_none()
+    if target:
+        target.status = new_status
+        await session.commit()

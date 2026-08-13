@@ -56,3 +56,21 @@ class TargetService:
     async def clear_targets(campaign_id: int) -> int:
         async with AsyncSessionLocal() as session:
             return await target_repo.clear_targets(session, campaign_id)
+
+    @staticmethod
+    async def get_next_pending_target(campaign_id: int) -> dict | None:
+        async with AsyncSessionLocal() as session:
+            target = await target_repo.get_next_pending_target(session, campaign_id)
+            if not target:
+                return None
+            return {
+                "id": target.id,
+                "campaign_id": target.campaign_id,
+                "username": target.username,
+                "status": target.status
+            }
+
+    @staticmethod
+    async def update_target_status(target_id: int, new_status: str) -> None:
+        async with AsyncSessionLocal() as session:
+            await target_repo.update_target_status(session, target_id, new_status)

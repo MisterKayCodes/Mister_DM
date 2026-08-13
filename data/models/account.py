@@ -8,7 +8,7 @@ class Account(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, unique=True, nullable=False)
-    session_path = Column(String, nullable=False)
+    session_string = Column(String, nullable=False)
     delay_min = Column(Integer, nullable=False)
     delay_max = Column(Integer, nullable=False)
     is_active = Column(Boolean, default=True)

@@ -8,12 +8,12 @@ class AccountService:
     """
 
     @staticmethod
-    async def add_account(name: str, session_path: str, delay_min: int, delay_max: int) -> tuple[bool, str]:
+    async def add_account(name: str, session_string: str, delay_min: int, delay_max: int) -> tuple[bool, str]:
         # #FIXED: Session lifecycle moved to the Service layer (Nerves).
         # WHAT WOULD HAVE HAPPENED: Handlers opening their own sessions violates the
         # architectural rule that the bot (Mouth) should not manage database state.
         async with AsyncSessionLocal() as session:
-            return await account_repo.add_account(session, name, session_path, delay_min, delay_max)
+            return await account_repo.add_account(session, name, session_string, delay_min, delay_max)
 
     # #FIXED: Convert State to Clean Payload Dictionaries
     # By mapping SQLAlchemy models into plain dictionaries before they leave the Service layer, 
@@ -27,7 +27,7 @@ class AccountService:
                 {
                     "id": a.id,
                     "name": a.name,
-                    "session_path": a.session_path,
+                    "session_string": a.session_string,
                     "delay_min": a.delay_min,
                     "delay_max": a.delay_max
                 } for a in accounts
@@ -46,7 +46,7 @@ class AccountService:
             return {
                 "id": account.id,
                 "name": account.name,
-                "session_path": account.session_path,
+                "session_string": account.session_string,
                 "delay_min": account.delay_min,
                 "delay_max": account.delay_max
             }
@@ -64,7 +64,7 @@ class AccountService:
             return {
                 "id": account.id,
                 "name": account.name,
-                "session_path": account.session_path,
+                "session_string": account.session_string,
                 "delay_min": account.delay_min,
                 "delay_max": account.delay_max
             }
@@ -82,7 +82,7 @@ class AccountService:
                 {
                     "id": a.id,
                     "name": a.name,
-                    "session_path": a.session_path,
+                    "session_string": a.session_string,
                     "delay_min": a.delay_min,
                     "delay_max": a.delay_max
                 } for a in accounts

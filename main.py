@@ -4,11 +4,16 @@ from aiogram import Bot, Dispatcher
 from config import BOT_TOKEN
 from data.database import init_db
 from bot.handlers import account_router, campaign_router, template_router, target_router
+from services.campaign_service import CampaignService
 
 async def on_startup(bot: Bot):
     """Executes at the very start of polling."""
     # Clear pending updates so the bot doesn't reply to old messages
     await bot.delete_webhook(drop_pending_updates=True)
+    
+    # Run startup recovery for Ghost Campaign states
+    await CampaignService.recover_running_campaigns()
+    print("✅ Startup Recovery: Running campaigns reverted to paused.")
     
     # This will now print AFTER all framework info logs are finished
     print("✅ Bot is running!")

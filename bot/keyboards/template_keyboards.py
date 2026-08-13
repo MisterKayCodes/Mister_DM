@@ -1,25 +1,40 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-def manage_campaign_keyboard() -> ReplyKeyboardMarkup:
-    """Keyboard for managing a specific campaign."""
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(text="➕ Add Template"),
-                KeyboardButton(text="📋 View Templates")
-            ],
-            [
-                KeyboardButton(text="👥 Add Targets"),
-                KeyboardButton(text="👀 View Targets")
-            ],
-            [
-                KeyboardButton(text="🗑 Clear Targets"),
-                KeyboardButton(text="🗑 Delete Campaign")
-            ],
-            [
-                KeyboardButton(text="⬅️ Back to Campaigns")
-            ]
+def manage_campaign_keyboard(status: str = "draft") -> ReplyKeyboardMarkup:
+    """Status-aware keyboard for managing a specific campaign."""
+    keyboard = [
+        [
+            KeyboardButton(text="➕ Add Template"),
+            KeyboardButton(text="📋 View Templates")
         ],
+        [
+            KeyboardButton(text="👥 Add Targets"),
+            KeyboardButton(text="👀 View Targets")
+        ],
+    ]
+    
+    # Scheduler controls — shown based on campaign status
+    if status == "running":
+        keyboard.append([
+            KeyboardButton(text="⏸ Pause Campaign"),
+            KeyboardButton(text="🛑 Stop Campaign")
+        ])
+    elif status in ("draft", "paused", "stopped"):
+        keyboard.append([
+            KeyboardButton(text="▶ Start Campaign")
+        ])
+    # completed: no start/pause/stop shown
+    
+    keyboard.append([
+        KeyboardButton(text="🗑 Clear Targets"),
+        KeyboardButton(text="🗑 Delete Campaign")
+    ])
+    keyboard.append([
+        KeyboardButton(text="⬅️ Back to Campaigns")
+    ])
+    
+    return ReplyKeyboardMarkup(
+        keyboard=keyboard,
         resize_keyboard=True,
         one_time_keyboard=False
     )

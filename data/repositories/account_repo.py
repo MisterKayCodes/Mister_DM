@@ -4,11 +4,11 @@ from sqlalchemy.exc import IntegrityError
 from data.models.account import Account
 from data.models.campaign import Campaign
 
-async def add_account(session: AsyncSession, name: str, session_path: str, delay_min: int, delay_max: int) -> tuple[bool, str]:
+async def add_account(session: AsyncSession, name: str, session_string: str, delay_min: int, delay_max: int) -> tuple[bool, str]:
     """Adds a new account. Returns (success, message)."""
     new_account = Account(
         name=name,
-        session_path=session_path,
+        session_string=session_string,
         delay_min=delay_min,
         delay_max=delay_max
     )

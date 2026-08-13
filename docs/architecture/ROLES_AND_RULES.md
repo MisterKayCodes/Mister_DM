@@ -102,11 +102,16 @@ it does not belong here.
 
 ---
 
-### 🧠 Brain — `core/` (Future — Phase 5+)
+### 🧠 Brain — `core/` (Future — Phase 6+)
 **Job:** Orchestrate long-running processes. The Scheduler lives here.
 
 The Brain will coordinate the Campaign Scheduler — picking targets, selecting templates
 at random, sending DMs via Telethon, tracking results, and managing campaign state transitions.
+
+**Phase 5 Decision:** The Scheduler (`SchedulerService`) is placed in `services/` for now,
+not `core/`, because it still coordinates Service calls and follows the same session boundary
+rules as other services. It will be promoted to `core/` in a future phase when a true
+orchestration layer with independent lifecycle management is warranted.
 
 The Brain imports from `services/` to trigger operations. It never speaks to the
 database directly and never touches aiogram.
@@ -138,6 +143,9 @@ database directly and never touches aiogram.
 | Over-eager memory loading (`selectinload` on index lists) | Pulling massive arrays of child models (e.g. templates) while fetching a bulk parent index list introduces severe memory thrashing. Keep relational loads strictly scoped inside single-entity fetches (e.g., `get_by_id`). |
 | Loading entire ORM models into RAM before deleting | Inefficient network usage. Execute clean bulk SQL deletion using `session.execute(delete(Model).where(...))` for single-trip atomic deletion. |
 | Row-by-row `session.add()` + `flush()` loop | Thrashes connection pools, drops cache, and introduces severe latency blocks. Parse to unique dicts and execute atomic batch plugins (e.g., `sqlite_insert(Model).values(...).on_conflict_do_nothing()`). |
+| Hardcoding assumed post-action status in the Mouth | After a scheduler control action (start/pause/stop), the handler must NOT assume the resulting status string. It must unpack the actual DB-verified status returned by the Service and pass that to any keyboard or UI builder. Assumed status creates split-brain UI states where the keyboard shows wrong controls. |
+| Inconsistent tuple arity on multi-path returns | If a function signature returns `tuple[bool, str, str]`, every single exit path must return exactly 3 elements. A 2-tuple on any branch will cause a `ValueError` unpack crash at runtime the moment that code path is hit. Use a lint rule or runtime type-check to enforce this. |
+| Ghost campaign state on bot restart | If a campaign is marked `running` in the DB and the bot restarts, no asyncio task exists for it. The DB lies. On every bot startup, query all `running` campaigns and revert them to `paused` to restore a truthful state before accepting any user input. |
 
 
 ---

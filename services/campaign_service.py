@@ -127,3 +127,14 @@ class CampaignService:
         if campaign["status"] != "draft":
             return False, campaign["status"]
         return True, "draft"
+
+    @staticmethod
+    async def update_campaign_status(campaign_id: int, new_status: str) -> None:
+        async with AsyncSessionLocal() as session:
+            await campaign_repo.update_campaign_status(session, campaign_id, new_status)
+
+    @staticmethod
+    async def recover_running_campaigns() -> None:
+        """Called on bot startup to revert 'running' campaigns to 'paused'."""
+        async with AsyncSessionLocal() as session:
+            await campaign_repo.recover_running_campaigns(session)

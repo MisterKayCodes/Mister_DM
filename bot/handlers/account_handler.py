@@ -142,6 +142,7 @@ async def _validate_and_save_account(message: Message, state: FSMContext, sessio
     is_valid, error_reason = await verify_session(session_string)
     
     if not is_valid:
+        # This is 100% fine because it does NOT have a reply_markup!
         await status_msg.edit_text(
             f"❌ <b>Session validation failed</b>\n\n"
             f"Reason:\n<code>{error_reason}</code>\n\n"
@@ -155,13 +156,20 @@ async def _validate_and_save_account(message: Message, state: FSMContext, sessio
     success, msg = await AccountService.add_account(name, session_string, delay_min, delay_max)
         
     if success:
-        await status_msg.edit_text(
+        # #FIXED: Deleted old status bubble and switched to message.answer to handle ReplyKeyboardMarkup.
+        # WHAT WOULD HAVE HAPPENED: edit_text would try to attach a smartphone menu keyboard 
+        # to a floating history bubble, causing a fatal Pydantic Type ValidationError crash.
+        await status_msg.delete()
+        await message.answer(
             f"✅ Session verified.\n✅ Account saved! ({name} | {delay_min}–{delay_max} mins)",
             reply_markup=accounts_menu_keyboard()
         )
         await state.clear()
     else:
-        await status_msg.edit_text(
+        # #FIXED: Deleted old status bubble and switched to message.answer to handle ReplyKeyboardMarkup.
+        # WHAT WOULD HAVE HAPPENED: Same as above; editing a chat bubble with main menu reply markup crashes the bot.
+        await status_msg.delete()
+        await message.answer(
             f"❌ Failed to save to database: {msg}\nPlease choose a different name or go back:",
             reply_markup=accounts_menu_keyboard()
         )
@@ -196,7 +204,7 @@ async def delete_account_prompt(message: Message):
         return
         
     await message.answer(
-        f"Are you sure you want to delete <b>{safe_html(account.name)}</b>? This cannot be undone.",
+        f"Are you sure you want to delete <b>{safe_html(account['name'])}</b>? This cannot be undone.",
         reply_markup=confirm_delete_keyboard(account_id),
         parse_mode="HTML"
     )

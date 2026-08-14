@@ -41,10 +41,6 @@ async def main_menu_handler(message: Message, state: FSMContext):
         reply_markup=main_menu_keyboard()
     )
 
-@router.message(F.text.in_({"📊 Stats", "⚙ Settings"}), StateFilter("*"))
-async def coming_soon_handler(message: Message):
-    await message.answer("Coming soon 🚧")
-
 @router.message(F.text.in_({"📱 Accounts", "⬅️ Back to Accounts"}), StateFilter("*"))
 async def accounts_menu_handler(message: Message, state: FSMContext):
     await state.clear()
@@ -116,8 +112,26 @@ async def process_delay_max(message: Message, state: FSMContext):
     
     # Save the max delay in state in case we need to retry validation
     await state.update_data(delay_max=delay_max)
-    
-    await _validate_and_save_account(message, state, session_string, name, delay_min, delay_max)
+    await message.answer("Daily send limit for this account? (e.g. 40 — recommended max to avoid bans):")
+    await state.set_state(AddAccountStates.waiting_for_daily_limit)
+
+@router.message(AddAccountStates.waiting_for_daily_limit)
+async def process_daily_limit(message: Message, state: FSMContext):
+    try:
+        daily_limit = int(message.text.strip())
+        if daily_limit <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("Please enter a valid positive integer for daily limit (e.g. 40):")
+        return
+
+    await state.update_data(daily_limit=daily_limit)
+    data = await state.get_data()
+    await _validate_and_save_account(
+        message, state,
+        data.get("session_string"), data.get("name"),
+        data.get("delay_min"), data.get("delay_max"), daily_limit
+    )
 
 @router.message(AddAccountStates.waiting_for_session_retry)
 async def process_session_retry(message: Message, state: FSMContext):
@@ -131,10 +145,10 @@ async def process_session_retry(message: Message, state: FSMContext):
     
     await _validate_and_save_account(
         message, state, 
-        session_string, data.get("name"), data.get("delay_min"), data.get("delay_max")
+        session_string, data.get("name"), data.get("delay_min"), data.get("delay_max"), data.get("daily_limit", 40)
     )
 
-async def _validate_and_save_account(message: Message, state: FSMContext, session_string: str, name: str, delay_min: int, delay_max: int):
+async def _validate_and_save_account(message: Message, state: FSMContext, session_string: str, name: str, delay_min: int, delay_max: int, daily_limit: int = 40):
     """Helper to validate session and save account, handling the explicit retry state."""
     
     # 1. Validate Session
@@ -154,7 +168,7 @@ async def _validate_and_save_account(message: Message, state: FSMContext, sessio
         return
         
     # 2. Save Account
-    success, msg = await AccountService.add_account(name, session_string, delay_min, delay_max)
+    success, msg = await AccountService.add_account(name, session_string, delay_min, delay_max, daily_limit)
         
     if success:
         # #FIXED: Dynamically spawn background listener.
@@ -166,7 +180,7 @@ async def _validate_and_save_account(message: Message, state: FSMContext, sessio
             
         await status_msg.delete()
         await message.answer(
-            f"✅ Session verified.\n✅ Account saved! ({name} | {delay_min}–{delay_max} mins)",
+            f"✅ Session verified.\n✅ Account saved! ({name} | {delay_min}–{delay_max} min delay | {daily_limit}/day)",
             reply_markup=accounts_menu_keyboard()
         )
         await state.clear()

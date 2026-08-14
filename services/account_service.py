@@ -8,12 +8,12 @@ class AccountService:
     """
 
     @staticmethod
-    async def add_account(name: str, session_string: str, delay_min: int, delay_max: int) -> tuple[bool, str]:
+    async def add_account(name: str, session_string: str, delay_min: int, delay_max: int, daily_limit: int = 40) -> tuple[bool, str]:
         # #FIXED: Session lifecycle moved to the Service layer (Nerves).
         # WHAT WOULD HAVE HAPPENED: Handlers opening their own sessions violates the
         # architectural rule that the bot (Mouth) should not manage database state.
         async with AsyncSessionLocal() as session:
-            return await account_repo.add_account(session, name, session_string, delay_min, delay_max)
+            return await account_repo.add_account(session, name, session_string, delay_min, delay_max, daily_limit)
 
     # #FIXED: Convert State to Clean Payload Dictionaries
     # By mapping SQLAlchemy models into plain dictionaries before they leave the Service layer, 
@@ -29,7 +29,10 @@ class AccountService:
                     "name": a.name,
                     "session_string": a.session_string,
                     "delay_min": a.delay_min,
-                    "delay_max": a.delay_max
+                    "delay_max": a.delay_max,
+                    "daily_limit": a.daily_limit or 40,
+                    "messages_sent_today": a.messages_sent_today or 0,
+                    "status": "active" if a.is_active else "inactive"
                 } for a in accounts
             ]
 
@@ -48,7 +51,10 @@ class AccountService:
                 "name": account.name,
                 "session_string": account.session_string,
                 "delay_min": account.delay_min,
-                "delay_max": account.delay_max
+                "delay_max": account.delay_max,
+                "daily_limit": account.daily_limit or 40,
+                "messages_sent_today": account.messages_sent_today or 0,
+                "status": "active" if account.is_active else "inactive"
             }
 
     # #FIXED: Convert State to Clean Payload Dictionaries
@@ -66,7 +72,10 @@ class AccountService:
                 "name": account.name,
                 "session_string": account.session_string,
                 "delay_min": account.delay_min,
-                "delay_max": account.delay_max
+                "delay_max": account.delay_max,
+                "daily_limit": account.daily_limit or 40,
+                "messages_sent_today": account.messages_sent_today or 0,
+                "status": "active" if account.is_active else "inactive"
             }
 
     # #FIXED: Convert State to Clean Payload Dictionaries
@@ -84,7 +93,19 @@ class AccountService:
                     "name": a.name,
                     "session_string": a.session_string,
                     "delay_min": a.delay_min,
-                    "delay_max": a.delay_max
+                    "delay_max": a.delay_max,
+                    "daily_limit": a.daily_limit or 40,
+                    "messages_sent_today": a.messages_sent_today or 0,
+                    "status": "active" if a.is_active else "inactive"
                 } for a in accounts
             ]
             return success, msg, fresh_accounts
+
+    @staticmethod
+    async def reset_all_daily_counters_if_needed() -> None:
+        """Called at startup to reset any account whose last_reset_date is before today."""
+        async with AsyncSessionLocal() as session:
+            accounts = await account_repo.get_all_accounts(session)
+            for account in accounts:
+                await account_repo.reset_daily_counter_if_needed(session, account.id)
+            await session.commit()

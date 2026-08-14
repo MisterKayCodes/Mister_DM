@@ -11,7 +11,9 @@ from bot.handlers.replies_handler import router as replies_handler
 from bot.handlers.pain_point_handler import router as pain_point_handler
 from bot.handlers.export_handler import router as export_handler
 from bot.handlers.stats_handler import router as stats_handler
+from bot.handlers.blacklist_handler import router as blacklist_handler
 from services.campaign_service import CampaignService
+from services.account_service import AccountService
 from core.reply_listener import ReplyListener
 from core.scheduler import Scheduler
 
@@ -21,6 +23,8 @@ logger = logging.getLogger(__name__)
 async def on_startup(bot: Bot):
     await bot.delete_webhook(drop_pending_updates=True)
     await CampaignService.recover_running_campaigns()
+    # Reset daily counters for any account that hasn't been reset today
+    await AccountService.reset_all_daily_counters_if_needed()
     # Start persistent listeners for all active accounts
     await ReplyListener.start_all_listeners()
     logger.info("✅ Bot is running!")
@@ -48,6 +52,7 @@ async def main():
     dp.include_router(pain_point_handler)
     dp.include_router(export_handler)
     dp.include_router(stats_handler)
+    dp.include_router(blacklist_handler)
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

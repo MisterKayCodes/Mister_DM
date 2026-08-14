@@ -3,6 +3,7 @@ import random
 import logging
 from config import DRY_RUN, DEV_DELAY_MIN, DEV_DELAY_MAX
 from data.database import AsyncSessionLocal
+from data.repositories import account_repo
 from services.campaign_service import CampaignService
 from services.target_service import TargetService
 from services.telethon_client import send_outreach_message
@@ -102,6 +103,29 @@ class Scheduler:
                         logger.error(f"Database error in campaign {campaign_id} loop: {e}")
                         await asyncio.sleep(10) # Wait before retry
                         continue
+                        
+                # 3.5 Check Blacklist (outside the target loop session to avoid long held locks)
+                from services.blacklist_service import BlacklistService
+                is_allowed = await BlacklistService.check_target_allowed(target["username"], target.get("telegram_user_id"))
+                if not is_allowed:
+                    logger.info(f"Target @{target['username']} is blacklisted. Skipping.")
+                    async with AsyncSessionLocal() as session:
+                        await TargetService.update_target_status(target["id"], "skipped", None, session)
+                        await session.commit()
+                    continue
+
+                # 3.6 Check daily send limit before attempting to send
+                async with AsyncSessionLocal() as session:
+                    await account_repo.reset_daily_counter_if_needed(session, account["id"])
+                    remaining = await account_repo.get_remaining_quota(session, account["id"])
+                    await session.commit()
+
+                if remaining <= 0:
+                    logger.warning(f"Account {account['id']} hit daily limit. Pausing campaign {campaign_id}.")
+                    async with AsyncSessionLocal() as session:
+                        await CampaignService.update_campaign_status(campaign_id, "paused", session)
+                        await session.commit()
+                    break
 
                 # 4. SEND MESSAGE (Outside the DB transaction to prevent holding locks over network)
                 logger.info(f"Campaign {campaign_id} sending to @{target['username']}...")
@@ -134,6 +158,8 @@ class Scheduler:
                                 telegram_message_id=random.randint(1000, 9999) if DRY_RUN else None,
                                 session=session
                             )
+                            # Increment the account's daily send counter
+                            await account_repo.increment_daily_counter(session, account["id"])
                             
                         await session.commit()
                     except Exception as e:

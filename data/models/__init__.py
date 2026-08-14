@@ -8,3 +8,4 @@ from .template import Template
 from .target import Target
 from .pain_tag import PainTag, target_pain_tags
 from .message import MessageLog
+from .blacklist import Blacklist

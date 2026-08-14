@@ -11,7 +11,7 @@ from bot.keyboards.account_keyboards import (
 )
 from services.account_service import AccountService
 from services.telethon_client import verify_session
-from services.reply_listener_service import ReplyListenerService
+from core.reply_listener import ReplyListener
 from utils.string_utils import generate_safe_filename
 from utils.telegram_utils import safe_html
 

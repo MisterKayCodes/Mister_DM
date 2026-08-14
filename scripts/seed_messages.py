@@ -6,7 +6,7 @@ Run AFTER seed_data.py. Used for testing the Export feature without real Telegra
 import asyncio
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Project root on path so imports resolve
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,6 +17,7 @@ from data.models.target import Target
 from data.models.campaign import Campaign
 from data.models.account import Account
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
 # Mock conversation templates — one per target for variety
 MOCK_CONVERSATIONS = [
@@ -45,8 +46,12 @@ async def seed_messages():
     
     async with AsyncSessionLocal() as session:
         # Fetch all targets that exist
+        #FIXED: Eagerly pre-loaded campaign and account relationships to prevent a lazy-load MissingGreenlet crash.
         result = await session.execute(
-            select(Target).join(Campaign).join(Account)
+            select(Target)
+            .join(Campaign)
+            .join(Account)
+            .options(selectinload(Target.campaign).selectinload(Campaign.account))
         )
         targets = result.scalars().all()
         
@@ -62,7 +67,9 @@ async def seed_messages():
             print(f"  💬 Seeding conversation for @{target.username} (ID: {target.id})")
             
             # Space messages 5 minutes apart for realistic timestamps
-            base_time = datetime.utcnow() - timedelta(hours=2)
+            #FIXED: Replaced deprecated utcnow() with timezone-aware now() stripped to naive format
+            base_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2)
+
             
             for j, (direction, msg_type, text) in enumerate(convo):
                 # Fill in username placeholder if present

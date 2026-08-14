@@ -13,12 +13,13 @@ from services.export_service import ExportService
 router = Router()
 logger = logging.getLogger(__name__)
 
-# UI string constants — centralized to avoid scatter
-MSG_GENERATING = "⏳ Generating export... please wait."
-MSG_DONE_TARGET = "✅ Here is the conversation export."
-MSG_DONE_CAMPAIGN = "✅ Here is the full campaign export."
-MSG_FAILED_UPLOAD = "❌ Failed to upload the document."
-MSG_NO_CAMPAIGN = "⚠️ No campaign selected. Please open a campaign first."
+from bot.constants.messages import (
+    MSG_GENERATING,
+    MSG_DONE_TARGET,
+    MSG_DONE_CAMPAIGN,
+    MSG_FAILED_UPLOAD,
+    MSG_NO_CAMPAIGN,
+)
 
 
 def _cleanup(filepath: str):

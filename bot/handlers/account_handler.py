@@ -176,7 +176,7 @@ async def _validate_and_save_account(message: Message, state: FSMContext, sessio
         # We fetch the fresh account from DB to get the assigned ID, then boot its listener instantly.
         account = await AccountService.get_account_by_name(name)
         if account:
-            await ReplyListenerService.start_listener(account)
+            await ReplyListener.start_listener(account)
             
         await status_msg.delete()
         await message.answer(
@@ -247,7 +247,7 @@ async def confirm_delete_handler(message: Message):
     if deleted:
         # #FIXED: Dynamically kill background listener.
         # WHY: To prevent memory leaks and zombie Telegram connections running for a deleted account.
-        await ReplyListenerService.stop_listener(account_id)
+        await ReplyListener.stop_listener(account_id)
         
         await message.answer(f"✅ Account deleted successfully.")
     else:

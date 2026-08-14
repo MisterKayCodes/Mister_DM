@@ -10,6 +10,7 @@ from bot.handlers.target_handler import router as target_handler
 from bot.handlers.replies_handler import router as replies_handler
 from bot.handlers.pain_point_handler import router as pain_point_handler
 from bot.handlers.export_handler import router as export_handler
+from bot.handlers.stats_handler import router as stats_handler
 from services.campaign_service import CampaignService
 from core.reply_listener import ReplyListener
 from core.scheduler import Scheduler
@@ -46,6 +47,7 @@ async def main():
     dp.include_router(replies_handler)
     dp.include_router(pain_point_handler)
     dp.include_router(export_handler)
+    dp.include_router(stats_handler)
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

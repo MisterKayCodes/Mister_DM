@@ -30,7 +30,10 @@ def manage_campaign_keyboard(status: str = "draft") -> ReplyKeyboardMarkup:
         KeyboardButton(text="🗑 Delete Campaign")
     ])
     keyboard.append([
+        KeyboardButton(text="📊 View Stats"),
         KeyboardButton(text="📥 Export Campaign"),
+    ])
+    keyboard.append([
         KeyboardButton(text="⬅️ Back to Campaigns")
     ])
     

@@ -1,3 +1,4 @@
+# bot\handlers\target_handler.py
 import io
 from aiogram import Router, F
 from aiogram.types import Message, ReplyKeyboardRemove, BufferedInputFile, CallbackQuery
@@ -139,16 +140,18 @@ async def process_text_paste(message: Message, state: FSMContext):
 
     await message.answer("⏳ Processing...")
 
-    stats = await TargetService.add_targets_bulk(campaign_id, message.text)
+    result = await TargetService.add_targets_bulk(campaign_id, message.text)
 
     await state.set_state(None)
 
-    # #FIXED: Firewall text preparation — Mouth builds the HTML layout block locally.
-    # WHAT WAS ADJUSTED: The Service returns a clean dict `{added, duplicates, invalid}`.
-    # The Mouth is responsible for assembling the final display string from that dict.
-    # PREVENTED FAILURE: If the Service pre-built the string, it would need to know about
-    # Telegram HTML format, parse_mode, and emojis — coupling the Nerves to a presentation
-    # framework. The dict keeps the Service format-agnostic (works for Telegram, logs, APIs).
+    if not result.get("success", False):
+        await message.answer(
+            f"❌ Import failed: {result.get('message', 'Unknown error')}",
+            reply_markup=manage_campaign_keyboard()
+        )
+        return
+
+    stats = result["data"]
     await message.answer(
         f"✅ <b>Import Complete</b>\n\n"
         f"• Added: {stats['added']}\n"
@@ -207,9 +210,18 @@ async def process_file_upload(message: Message, state: FSMContext):
     # `process_file_bytes` method, which executes it asynchronously in a background thread.
     # PREVENTED FAILURE: Completely halts asynchronous execution loops for all concurrent 
     # users when large files are loaded directly in the main thread.
-    stats = await TargetService.process_file_bytes(campaign_id, file_bytes)
+    result = await TargetService.process_file_bytes(campaign_id, file_bytes)
 
     await state.set_state(None)
+
+    if not result.get("success", False):
+        await message.answer(
+            f"❌ Import failed: {result.get('message', 'Unknown error')}",
+            reply_markup=manage_campaign_keyboard()
+        )
+        return
+
+    stats = result["data"]
     await message.answer(
         f"✅ <b>Import Complete</b>\n\n"
         f"• Added: {stats['added']}\n"

@@ -6,7 +6,7 @@ from bot.states.pain_tag_states import PainPointStates
 from bot.keyboards.pain_points_keyboards import pain_dashboard_keyboard, back_to_pain_dash_keyboard
 from services.pain_tag_service import PainTagService
 from services.target_service import TargetService
-from bot.helpers.profile_renderer import render_target_profile
+from bot.utils.profile_renderer import render_target_profile
 from bot.keyboards.target_keyboards import target_profile_keyboard
 
 router = Router()

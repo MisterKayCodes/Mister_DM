@@ -41,7 +41,7 @@ async def main_menu_handler(message: Message, state: FSMContext):
         reply_markup=main_menu_keyboard()
     )
 
-@router.message(F.text.in_({"👥 Targets", "💬 Replies", "🏷 Pain Points", "📊 Stats", "⚙ Settings"}), StateFilter("*"))
+@router.message(F.text.in_({"📊 Stats", "⚙ Settings"}), StateFilter("*"))
 async def coming_soon_handler(message: Message):
     await message.answer("Coming soon 🚧")
 

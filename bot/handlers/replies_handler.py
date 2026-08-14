@@ -4,7 +4,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from bot.states.replies_states import RepliesStates
 from bot.keyboards.target_keyboards import target_profile_keyboard, note_cancel_keyboard
-from bot.helpers.profile_renderer import render_target_profile
+from bot.utils.profile_renderer import render_target_profile
 from services.target_service import TargetService
 from services.pain_tag_service import PainTagService
 from bot.keyboards.pain_points_keyboards import pain_selection_keyboard

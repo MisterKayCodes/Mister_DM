@@ -57,7 +57,7 @@ class ExportService:
                 
             # 3. Fetch all targets in campaign to resolve usernames
             # We fetch all targets to map target_id -> username efficiently
-            targets = await TargetService.get_targets_for_campaign(campaign_id, sess)
+            targets = await TargetService.get_targets_by_campaign(campaign_id, sess)
             target_map = {t["id"]: t["username"] for t in targets}
             
             # 4. Group messages by username

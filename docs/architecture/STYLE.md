@@ -209,3 +209,23 @@ These almost never appear in Telegram usernames or campaign names, making it the
 **Location:** `utils/telegram_utils.py` also contains `bold()`, `italic()`, and `code()` helpers
 for all HTML-formatted output so you never have to write raw HTML tags in handler code.
 
+---
+
+## 12. Centralize UI Strings in Constants
+
+**Rule:** Handlers must never contain hardcoded UI strings (prompts, errors, success messages). All UI strings must be extracted to `bot/constants/messages.py`.
+
+```python
+# ❌ NEVER DO THIS (Hardcoded strings scattered in logic):
+await message.answer("What is the name of this campaign?")
+
+# ✅ ALWAYS DO THIS (Strings imported from constants):
+from bot.constants.messages import CAMP_ASK_NAME
+await message.answer(CAMP_ASK_NAME)
+```
+
+**Why:**
+1. **Separation of Concerns:** The Mouth's job is UI coordination. The exact text is presentation data.
+2. **Readability:** Handlers become much shorter and easier to read when long string blocks are removed.
+3. **Consistency:** If 3 handlers need to say "Campaign not found", they all use the exact same string (`CAMP_NOT_FOUND`). If we want to change it to "⚠️ Campaign not found", we change it in one place.
+

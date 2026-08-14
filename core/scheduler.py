@@ -6,6 +6,7 @@ from data.database import AsyncSessionLocal
 from services.campaign_service import CampaignService
 from services.target_service import TargetService
 from services.telethon_client import send_outreach_message
+from services.message_service import MessageService
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,20 @@ class Scheduler:
                     try:
                         new_status = "sent" if success else "failed"
                         await TargetService.update_target_status(target["id"], new_status, telegram_user_id, session)
+                        
+                        if success:
+                            # Log the outbound message
+                            # In DRY_RUN, telegram_message_id is mocked
+                            await MessageService.log_message(
+                                account_id=account["id"],
+                                target_id=target["id"],
+                                direction="OUTBOUND",
+                                message_type="TEXT",
+                                text=message_text,
+                                telegram_message_id=random.randint(1000, 9999) if DRY_RUN else None,
+                                session=session
+                            )
+                            
                         await session.commit()
                     except Exception as e:
                         await session.rollback()

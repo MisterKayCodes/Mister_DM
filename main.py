@@ -9,8 +9,9 @@ from bot.handlers.template_handler import router as template_router
 from bot.handlers.target_handler import router as target_handler
 from bot.handlers.replies_handler import router as replies_handler
 from bot.handlers.pain_point_handler import router as pain_point_handler
+from bot.handlers.export_handler import router as export_handler
 from services.campaign_service import CampaignService
-from services.reply_listener_service import ReplyListenerService
+from core.reply_listener import ReplyListener
 from core.scheduler import Scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -19,16 +20,16 @@ logger = logging.getLogger(__name__)
 async def on_startup(bot: Bot):
     await bot.delete_webhook(drop_pending_updates=True)
     await CampaignService.recover_running_campaigns()
-    await ReplyListenerService.start_all_listeners()
+    # Start persistent listeners for all active accounts
+    await ReplyListener.start_all_listeners()
     logger.info("✅ Bot is running!")
 
 async def on_shutdown(bot: Bot):
     logger.info("Shutting down...")
     # Cancel all active campaign loops
     await Scheduler.stop_all()
-    # Cancel all reply listener tasks
-    for account_id in list(ReplyListenerService.active_listeners.keys()):
-        await ReplyListenerService.stop_listener(account_id)
+    # Cancel all listener connections gracefully
+    await ReplyListener.stop_all()
     await bot.session.close()
     logger.info("👋 Goodbye!")
 
@@ -44,6 +45,7 @@ async def main():
     dp.include_router(target_handler)
     dp.include_router(replies_handler)
     dp.include_router(pain_point_handler)
+    dp.include_router(export_handler)
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

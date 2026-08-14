@@ -126,3 +126,15 @@ async def get_replied_targets(session: AsyncSession) -> list[Target]:
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+async def get_targets_by_telegram_id_and_campaigns(session: AsyncSession, telegram_user_id: int, campaign_ids: list[int]) -> list[Target]:
+    """Fetches all targets matching the telegram ID across the given campaigns."""
+    if not campaign_ids:
+        return []
+    stmt = (
+        select(Target)
+        .where(Target.telegram_user_id == telegram_user_id)
+        .where(Target.campaign_id.in_(campaign_ids))
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())

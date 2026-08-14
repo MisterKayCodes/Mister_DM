@@ -14,3 +14,6 @@ DRY_RUN = True
 DEV_DELAY_MIN = 1
 DEV_DELAY_MAX = 3
 
+TELETHON_API_ID = os.getenv("TELETHON_API_ID", "12345")
+TELETHON_API_HASH = os.getenv("TELETHON_API_HASH", "dummy_hash")
+

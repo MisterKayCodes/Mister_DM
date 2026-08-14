@@ -36,6 +36,7 @@ def target_profile_keyboard(target_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🏷 Add Pain Tag", callback_data=f"add_pain_{target_id}")],
         [InlineKeyboardButton(text="📝 Edit Note", callback_data=f"edit_note_{target_id}")],
+        [InlineKeyboardButton(text="📥 Export Chat", callback_data=f"export_target_{target_id}")],
         [InlineKeyboardButton(text="⬅️ Back to Replies", callback_data="view_replies")]
     ])
 

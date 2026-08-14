@@ -194,6 +194,21 @@ class TargetService:
         return await _execute(session)
 
     @staticmethod
+    async def get_targets_by_telegram_id_and_account(telegram_user_id: int, account_id: int, session: AsyncSession = None) -> list[dict]:
+        async def _execute(sess: AsyncSession):
+            campaigns = await campaign_repo.get_campaigns_by_account(sess, account_id)
+            if not campaigns:
+                return []
+            campaign_ids = [c.id for c in campaigns]
+            targets = await target_repo.get_targets_by_telegram_id_and_campaigns(sess, telegram_user_id, campaign_ids)
+            return [{"id": t.id, "campaign_id": t.campaign_id, "username": t.username} for t in targets]
+            
+        if session is None:
+            async with AsyncSessionLocal() as new_sess:
+                return await _execute(new_sess)
+        return await _execute(session)
+
+    @staticmethod
     async def get_target_by_id(target_id: int, load_pain_tags: bool = False, session: AsyncSession = None) -> dict | None:
         async def _execute(sess: AsyncSession):
             target = await target_repo.get_target_by_id(sess, target_id, load_pain_tags=load_pain_tags)

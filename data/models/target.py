@@ -18,6 +18,7 @@ class Target(Base):
     created_at = Column(DateTime, default=func.now())
 
     campaign = relationship("Campaign", back_populates="targets")
+    pain_tags = relationship("PainTag", secondary="target_pain_tags", back_populates="targets")
 
     # Uniqueness is enforced at the database level, not in application code.
     # Two simultaneous imports could both pass a Python-level check and both insert,

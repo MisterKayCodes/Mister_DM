@@ -3,58 +3,51 @@ import logging
 from aiogram import Bot, Dispatcher
 from config import BOT_TOKEN
 from data.database import init_db
-from bot.handlers import account_router, campaign_router, template_router, target_router
+from bot.handlers.account_handler import router as account_router
+from bot.handlers.campaign_handler import router as campaign_router
+from bot.handlers.template_handler import router as template_router
+from bot.handlers.target_handler import router as target_handler
+from bot.handlers.replies_handler import router as replies_handler
+from bot.handlers.pain_point_handler import router as pain_point_handler
 from services.campaign_service import CampaignService
 from services.reply_listener_service import ReplyListenerService
+from core.scheduler import Scheduler
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 async def on_startup(bot: Bot):
-    """Executes at the very start of polling."""
-    # Clear pending updates so the bot doesn't reply to old messages
     await bot.delete_webhook(drop_pending_updates=True)
-    
-    # Run startup recovery for Ghost Campaign states
     await CampaignService.recover_running_campaigns()
-    print("✅ Startup Recovery: Running campaigns reverted to paused.")
-    
-    # Start the reply tracking engine
     await ReplyListenerService.start_all_listeners()
-    
-    # This will now print AFTER all framework info logs are finished
-    print("✅ Bot is running!")
+    logger.info("✅ Bot is running!")
 
 async def on_shutdown(bot: Bot):
-    """Executes when the bot is stopped."""
-    print("\n👋 Shutting down bot session...")
-    
-    # Cleanup all listener tasks
+    logger.info("Shutting down...")
+    # Cancel all active campaign loops
+    await Scheduler.stop_all()
+    # Cancel all reply listener tasks
     for account_id in list(ReplyListenerService.active_listeners.keys()):
         await ReplyListenerService.stop_listener(account_id)
-        
     await bot.session.close()
-    print("👋 Goodbye!")
+    logger.info("👋 Goodbye!")
 
 async def main():
-    # Keep the logging configuration
-    logging.basicConfig(level=logging.INFO)
-    
-    print("🚀 Starting up, please wait...")
-    
-    # Initialize database
+    logger.info("🚀 Starting up, please wait...")
     await init_db()
-    
-    # Setup bot and dispatcher
+
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
     dp.include_router(account_router)
     dp.include_router(campaign_router)
     dp.include_router(template_router)
-    dp.include_router(target_router)
-    
-    # Register native startup and shutdown lifecycle hooks
+    dp.include_router(target_handler)
+    dp.include_router(replies_handler)
+    dp.include_router(pain_point_handler)
+
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
-    
-    # start_polling will fire logs FIRST, then trigger on_startup
+
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

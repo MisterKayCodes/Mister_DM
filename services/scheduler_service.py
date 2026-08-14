@@ -7,7 +7,7 @@ from services.account_service import AccountService
 from services.telethon_client import send_outreach_message
 
 # Toggle for safety during dev
-DRY_RUN = True
+DRY_RUN = False
 # Override delays for testing (10-20 seconds)
 DEV_DELAY_MIN = 10
 DEV_DELAY_MAX = 20

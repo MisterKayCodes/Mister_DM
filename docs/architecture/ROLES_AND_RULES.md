@@ -152,14 +152,8 @@ database directly and never touches aiogram.
 
 ## Code Comment Standards
 
-### The `#FIXED:` Tag
-Every corrected bug or architectural fix must be documented directly above the fixed code:
-
-```python
-# #FIXED: Short description of what was wrong.
-# WHAT WOULD HAVE HAPPENED: The exact crash, data corruption, or silent failure
-# that would have occurred if this was left unfixed.
-```
+Use short, brief comment tags to explain architectural decisions and logic. 
+Do not use verbose formatting (like `#FIXED` or multi-line blocks) because it occupies too much space in the code. Keep it short but informative.
 
 ### The "Why" Comment Standard
 Comments explain the pain, not the code. The code already explains itself.
@@ -169,9 +163,8 @@ Comments explain the pain, not the code. The code already explains itself.
 # Opens the database session
 
 # ✅ Right — describes the pain:
-# We open a single session for this entire handler so that the template count
-# and the target count are read in the same transaction. Two separate sessions
-# could theoretically see different data if a write lands between them.
+# #FIXED: Without a single session, two queries could see different data.
+# WHAT WOULD HAPPEN: A write between them makes counts mismatch. Wrong numbers = wrong UI.
 async with AsyncSessionLocal() as session:
 ```
 
@@ -216,3 +209,31 @@ Before graduating from any phase, the architect (user) reviews the code against 
 
 This is how this document grows. It is never written in one sitting.
 It is a record of every hard decision made in production.
+
+---
+
+## AI Execution Discipline (The 3-Step Guardrail)
+
+When an AI is in "execution mode" (rapidly generating code), it tends to optimize for "getting it to work" rather than strict architectural compliance. This leads to regression into common bad patterns (like repositories committing transactions). 
+
+To prevent this, the AI must enforce the following discipline on itself:
+
+1. **Pre-flight Declaration (Before writing a file):**
+   - The AI must explicitly declare the layer and the applicable rules before generating the file. 
+   - *Example:* "Layer: Repository. Rules that apply: No commits, no business logic, returns ORM only."
+   - *Why:* Forces the AI to retrieve the constraints into active context *before* the first token of code is generated.
+
+2. **File Header Layer Comment:**
+   - Every file must have a 1-3 line comment at the top declaring its layer constraints.
+   - *Example:* `# LAYER: Repository — no commits, no rollbacks, no business logic`
+   - *Why:* Makes violations visually obvious to human reviewers and reminds the AI of the constraints when re-reading the file during future edits.
+
+3. **Phase Boundary Self-Audit:**
+   - Before handing a completed phase back to the human for testing, the AI must run a self-audit checklist:
+     - *Do any repos commit?*
+     - *Do any services return raw ORM objects?*
+     - *Do any handlers call other handlers?*
+     - *Do any repos contain if/else business decisions?*
+     - *Are all DTOs consistent?*
+   - *Why:* Catches inevitable generation mistakes before they waste the human's testing time.
+

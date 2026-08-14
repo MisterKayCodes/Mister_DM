@@ -27,7 +27,7 @@ $commands = @"
 cd $PROJECT_DIR
 
 echo '--- Pulling latest code ---'
-PULL_OUTPUT=\$(git pull origin main)
+PULL_OUTPUT=`$(git pull origin main 2>&1)
 echo "`$PULL_OUTPUT"
 
 echo ''

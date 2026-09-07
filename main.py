@@ -16,6 +16,7 @@ from services.campaign_service import CampaignService
 from services.account_service import AccountService
 from core.reply_listener import ReplyListener
 from core.scheduler import Scheduler
+from api.server import start_api_server
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,6 +28,9 @@ async def on_startup(bot: Bot):
     await AccountService.reset_all_daily_counters_if_needed()
     # Start persistent listeners for all active accounts
     await ReplyListener.start_all_listeners()
+    # Start FastAPI REST server background task
+    asyncio.create_task(start_api_server())
+    logger.info("🌐 FastAPI REST Server running on port 8013")
     logger.info("✅ Bot is running!")
 
 async def on_shutdown(bot: Bot):

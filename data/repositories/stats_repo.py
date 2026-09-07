@@ -1,4 +1,3 @@
-# LAYER: Repository (Memory) — No commits, no business logic, session injected, returns raw primitives only.
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
 from data.models.target import Target
@@ -87,3 +86,19 @@ async def get_global_message_count(session: AsyncSession) -> int:
     """Returns total messages logged across the entire system."""
     result = await session.execute(select(func.count(MessageLog.id)))
     return result.scalar_one() or 0
+
+
+async def get_global_stats(session: AsyncSession) -> dict:
+    """Returns aggregated global statistics for the system."""
+    campaigns = await get_global_campaign_counts(session)
+    targets = await get_global_target_counts(session)
+    messages = await get_global_message_count(session)
+    reply_rate = (targets["replied"] / targets["sent"] * 100) if targets["sent"] > 0 else 0.0
+    failure_rate = (targets["failed"] / targets["total"] * 100) if targets["total"] > 0 else 0.0
+    return {
+        "campaigns": campaigns,
+        "targets": targets,
+        "total_messages": messages,
+        "reply_rate_percent": round(reply_rate, 2),
+        "failure_rate_percent": round(failure_rate, 2)
+    }

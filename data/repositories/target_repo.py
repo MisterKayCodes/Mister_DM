@@ -117,6 +117,13 @@ async def get_target_by_username(session: AsyncSession, username: str, load_pain
     return result.scalar_one_or_none()
 
 
+async def get_target_by_campaign_and_username(session: AsyncSession, campaign_id: int, username: str) -> Target | None:
+    """Fetches a single target by campaign ID and username."""
+    stmt = select(Target).where(Target.campaign_id == campaign_id, Target.username == username).limit(1)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def get_replied_targets(session: AsyncSession) -> list[Target]:
     """Fetches all targets that have replied across the entire system."""
     stmt = (

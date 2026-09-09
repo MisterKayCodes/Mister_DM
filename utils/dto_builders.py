@@ -9,6 +9,7 @@ def campaign_to_dto(campaign: Campaign) -> dict:
         "id": campaign.id,
         "name": campaign.name,
         "account_id": campaign.account_id,
+        "session_name": getattr(campaign, "session_name", None),
         "status": campaign.status,
         "created_at": campaign.created_at,
     }

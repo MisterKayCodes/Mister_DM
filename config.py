@@ -24,5 +24,9 @@ DM_API_KEY = os.getenv("DM_API_KEY")
 if not DM_API_KEY:
     raise ValueError("DM_API_KEY is not set in the environment variables.")
 
+# Mister Simulator Integration Settings
+SIMULATOR_API_URL = os.getenv("SIMULATOR_API_URL", "http://localhost:8012")
+SIMULATOR_API_KEY = os.getenv("SIMULATOR_API_KEY")
 
-
+if not SIMULATOR_API_KEY:
+    raise ValueError("SIMULATOR_API_KEY is not set in the environment variables.")

@@ -8,7 +8,8 @@ class Campaign(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, unique=True, nullable=False)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    session_name = Column(String, nullable=True)  # Reference to Mister Simulator session
     status = Column(String, default="draft", nullable=False)
     created_at = Column(DateTime, default=func.now())
 

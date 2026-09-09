@@ -1,20 +1,26 @@
 import asyncio
 import random
+import logging
 from services.campaign_service import CampaignService
 from services.target_service import TargetService
 from services.template_service import TemplateService
 from services.account_service import AccountService
 from services.telethon_client import send_outreach_message
+from clients.simulator_client import simulator_client
+from clients.exceptions import APIUnavailableError, APIResponseError
+
+logger = logging.getLogger(__name__)
 
 # Toggle for safety during dev
 DRY_RUN = False
-# Override delays for testing (10-20 seconds)
 DEV_DELAY_MIN = 10
 DEV_DELAY_MAX = 20
 
 class SchedulerService:
     """
     Manages the background execution of campaigns.
+    Delegates DMs to Mister Simulator API when session_name is available,
+    with fallback to local account session_string.
     """
     
     # Task registry
@@ -33,18 +39,29 @@ class SchedulerService:
         # 1. Validation
         campaign = await CampaignService.get_campaign_by_id(campaign_id)
         if not campaign:
-            # #FIXED: Consistent 3-tuple return on all exit paths.
-            # PREVENTED FAILURE: Handler unpacks (success, msg, actual_status). A 2-tuple here
-            # causes a ValueError at runtime the moment any campaign is missing from the DB.
             return False, "Campaign not found.", "unknown"
             
         if campaign["status"] == "completed":
             return False, "Campaign is already completed.", campaign["status"]
+
+        # Check session availability (Simulator session or local account)
+        account = None
+        session_name = campaign.get("session_name")
+        
+        if not session_name:
+            # Fallback to local account
+            account_id = campaign.get("account_id")
+            if account_id:
+                account = await AccountService.get_account_by_id(account_id)
             
-        account_id = campaign["account_id"]
-        account = await AccountService.get_account_by_id(account_id)
-        if not account:
-            return False, "Account missing.", campaign["status"]
+            # If no local account, attempt to borrow a dm_warrior session from Simulator
+            if not account:
+                dm_warriors = await simulator_client.get_dm_warrior_sessions()
+                if dm_warriors:
+                    session_name = dm_warriors[0].get("name") or dm_warriors[0].get("session_name")
+                
+            if not session_name and not account:
+                return False, "No active Simulator session or local account assigned to campaign.", campaign["status"]
             
         summary = await CampaignService.get_campaign_summary(campaign_id)
         if summary["templates_count"] == 0:
@@ -58,55 +75,73 @@ class SchedulerService:
         await CampaignService.update_campaign_status(campaign_id, "running")
         
         # 3. Start Background Task
-        task = asyncio.create_task(SchedulerService._campaign_loop(campaign_id, account))
+        task = asyncio.create_task(SchedulerService._campaign_loop(campaign_id, session_name, account))
         SchedulerService.active_campaigns[campaign_id] = task
         
-        # Re-fetch true status from DB — never assume what we just wrote
         updated = await CampaignService.get_campaign_by_id(campaign_id)
         return True, "Campaign started.", updated["status"] if updated else "running"
 
     @staticmethod
-    async def _campaign_loop(campaign_id: int, account: dict):
+    async def _campaign_loop(campaign_id: int, session_name: str | None, account: dict | None):
         """
-        The core engine loop.
+        The core engine loop. Delegating DM sends to Mister Simulator.
         """
-        print(f"[SCHEDULER] Started campaign {campaign_id}")
+        logger.info(f"[SCHEDULER] Started campaign {campaign_id} (Session: {session_name or 'Local Account'})")
         
         try:
             while True:
-                # Re-fetch campaign to check if status was changed (e.g. paused)
                 campaign = await CampaignService.get_campaign_by_id(campaign_id)
                 if not campaign or campaign["status"] != "running":
-                    print(f"[SCHEDULER] Campaign {campaign_id} no longer running. Exiting loop.")
+                    logger.info(f"[SCHEDULER] Campaign {campaign_id} no longer running. Exiting loop.")
                     break
                     
                 target = await TargetService.get_next_pending_target(campaign_id)
                 if not target:
-                    print(f"[SCHEDULER] Campaign {campaign_id} completed.")
+                    logger.info(f"[SCHEDULER] Campaign {campaign_id} completed.")
                     await CampaignService.update_campaign_status(campaign_id, "completed")
                     break
                     
                 templates = await TemplateService.get_templates_by_campaign(campaign_id)
                 if not templates:
-                    print(f"[SCHEDULER] Campaign {campaign_id} has no templates. Stopping.")
+                    logger.info(f"[SCHEDULER] Campaign {campaign_id} has no templates. Stopping.")
                     await CampaignService.update_campaign_status(campaign_id, "paused")
                     break
                     
                 template = random.choice(templates)
                 message_text = template["content"]
                 
-                print(f"[SCHEDULER] Processing target {target['username']}...")
+                logger.info(f"[SCHEDULER] Processing target {target['username']}...")
                 
-                # #FIXED: Handoff immutable target ID for reply tracking.
-                # WHY: send_outreach_message now resolves the immutable telegram_user_id. We must 
-                # save it during the 'sent' state transition so the background listener can match replies.
-                success, resolved_user_id = await send_outreach_message(
-                    session_string=account["session_string"],
-                    username=target["username"],
-                    message_text=message_text,
-                    dry_run=DRY_RUN
-                )
+                success = False
+                resolved_user_id = None
                 
+                # Delegation Path A: Mister Simulator API
+                target_session = session_name or campaign.get("session_name")
+                if target_session:
+                    try:
+                        res = await simulator_client.send_dm(
+                            session_name=target_session,
+                            target_username=target["username"],
+                            message_text=message_text
+                        )
+                        success = res.get("status") == "success" or res.get("ok", False)
+                        resolved_user_id = res.get("telegram_user_id") or res.get("user_id")
+                    except APIUnavailableError as e:
+                        logger.error(f"[SCHEDULER] Simulator API unavailable: {e}. Pausing campaign {campaign_id}.")
+                        await CampaignService.update_campaign_status(campaign_id, "paused")
+                        break
+                    except APIResponseError as e:
+                        logger.error(f"[SCHEDULER] Simulator API error: {e}")
+                        success = False
+                # Delegation Path B: Legacy Local Account Fallback
+                elif account and account.get("session_string"):
+                    success, resolved_user_id = await send_outreach_message(
+                        session_string=account["session_string"],
+                        username=target["username"],
+                        message_text=message_text,
+                        dry_run=DRY_RUN
+                    )
+
                 new_status = "sent" if success else "failed"
                 await TargetService.update_target_status(
                     target_id=target["id"], 
@@ -114,32 +149,27 @@ class SchedulerService:
                     telegram_user_id=resolved_user_id if success else None
                 )
                 
-                # Check soft-pause before sleeping
                 campaign_check = await CampaignService.get_campaign_by_id(campaign_id)
                 if campaign_check and campaign_check["status"] != "running":
-                    print(f"[SCHEDULER] Campaign {campaign_id} soft-paused. Exiting before sleep.")
+                    logger.info(f"[SCHEDULER] Campaign {campaign_id} soft-paused. Exiting before sleep.")
                     break
                 
-                # Delay calculation (override during dev)
-                delay_min = DEV_DELAY_MIN if DRY_RUN else account["delay_min"] * 60
-                delay_max = DEV_DELAY_MAX if DRY_RUN else account["delay_max"] * 60
+                delay_min = DEV_DELAY_MIN if DRY_RUN else (account["delay_min"] * 60 if account else 60)
+                delay_max = DEV_DELAY_MAX if DRY_RUN else (account["delay_max"] * 60 if account else 180)
                 sleep_time = random.randint(delay_min, delay_max)
                 
-                print(f"[SCHEDULER] Sleeping for {sleep_time} seconds...")
+                logger.info(f"[SCHEDULER] Sleeping for {sleep_time} seconds...")
                 await asyncio.sleep(sleep_time)
                 
         except Exception as e:
-            print(f"[SCHEDULER] Fatal error in campaign {campaign_id}: {e}")
+            logger.error(f"[SCHEDULER] Fatal error in campaign {campaign_id}: {e}")
             await CampaignService.update_campaign_status(campaign_id, "stopped")
         finally:
             SchedulerService.active_campaigns.pop(campaign_id, None)
-            print(f"[SCHEDULER] Campaign {campaign_id} loop terminated.")
+            logger.info(f"[SCHEDULER] Campaign {campaign_id} loop terminated.")
 
     @staticmethod
     async def pause_campaign(campaign_id: int) -> tuple[bool, str, str]:
-        """
-        Soft-pauses the campaign. Returns (success, message, actual_new_status).
-        """
         campaign = await CampaignService.get_campaign_by_id(campaign_id)
         if not campaign:
             return False, "Campaign not found.", "unknown"
@@ -148,22 +178,15 @@ class SchedulerService:
             return False, f"Campaign is currently {campaign['status']}, not running.", campaign["status"]
             
         await CampaignService.update_campaign_status(campaign_id, "paused")
-        
-        # Re-fetch true status from DB
         updated = await CampaignService.get_campaign_by_id(campaign_id)
-        return True, "Campaign paused. It will stop after the current iteration finishes.", updated["status"] if updated else "paused"
+        return True, "Campaign paused.", updated["status"] if updated else "paused"
 
     @staticmethod
     async def stop_campaign(campaign_id: int) -> tuple[bool, str, str]:
-        """
-        Soft-stops the campaign. Returns (success, message, actual_new_status).
-        """
         campaign = await CampaignService.get_campaign_by_id(campaign_id)
         if not campaign:
             return False, "Campaign not found.", "unknown"
             
         await CampaignService.update_campaign_status(campaign_id, "stopped")
-        
-        # Re-fetch true status from DB
         updated = await CampaignService.get_campaign_by_id(campaign_id)
         return True, "Campaign stopped.", updated["status"] if updated else "stopped"

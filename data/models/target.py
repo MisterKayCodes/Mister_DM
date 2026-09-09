@@ -17,12 +17,20 @@ class Target(Base):
     replied_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
+    # Phase 3: Lead Intelligence & Triage Columns
+    triage_status = Column(String, default="UNCLASSIFIED", nullable=False)
+    triage_raw_chat = Column(Text, nullable=True)
+    profile_notes = Column(Text, nullable=True)
+    profile_confidence = Column(Integer, default=0, nullable=False)
+    source_group = Column(String, nullable=True)
+    handoff_status = Column(String, nullable=True)
+    handoff_attempts = Column(Integer, default=0, nullable=False)
+    handoff_last_attempt = Column(DateTime, nullable=True)
+
     campaign = relationship("Campaign", back_populates="targets")
     pain_tags = relationship("PainTag", secondary="target_pain_tags", back_populates="targets")
 
     # Uniqueness is enforced at the database level, not in application code.
-    # Two simultaneous imports could both pass a Python-level check and both insert,
-    # creating duplicates. A database constraint is atomic — it cannot be raced.
     __table_args__ = (
         UniqueConstraint('campaign_id', 'username', name='uix_campaign_username'),
     )

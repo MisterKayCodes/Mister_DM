@@ -145,3 +145,57 @@ async def get_targets_by_telegram_id_and_campaigns(session: AsyncSession, telegr
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+# ==========================================
+# PHASE 3: Lead Intelligence Helper Methods
+# ==========================================
+
+async def update_triage(session: AsyncSession, target_id: int, triage_status: str, raw_chat: str | None = None) -> int:
+    """Updates the triage verdict and raw chat snippet for a target."""
+    stmt = (
+        update(Target)
+        .where(Target.id == target_id)
+        .values(triage_status=triage_status, triage_raw_chat=raw_chat)
+    )
+    result = await session.execute(stmt)
+    return result.rowcount
+
+
+async def update_profile(session: AsyncSession, target_id: int, profile_notes: str | None, profile_confidence: int, source_group: str | None = None) -> int:
+    """Updates the lead intelligence profile notes, confidence score, and source group."""
+    update_data = {
+        "profile_notes": profile_notes,
+        "profile_confidence": profile_confidence
+    }
+    if source_group:
+        update_data["source_group"] = source_group
+        
+    stmt = (
+        update(Target)
+        .where(Target.id == target_id)
+        .values(**update_data)
+    )
+    result = await session.execute(stmt)
+    return result.rowcount
+
+
+async def get_targets_by_triage(session: AsyncSession, triage_status: str) -> list[Target]:
+    """Fetches all targets matching a specific triage status (e.g. RELATIONAL or TRANSACTIONAL)."""
+    stmt = (
+        select(Target)
+        .where(Target.triage_status == triage_status)
+        .order_by(Target.id.desc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_failed_handoffs(session: AsyncSession) -> list[Target]:
+    """Fetches targets where handoff to Mister AI failed."""
+    stmt = (
+        select(Target)
+        .where(Target.handoff_status == "handoff_failed")
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())

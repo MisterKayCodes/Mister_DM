@@ -18,11 +18,33 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         
-        # Auto-migration check for SQLite session_name column
+        # 1. Auto-migration check for campaigns table (session_name column)
         try:
             res = await conn.execute(text("PRAGMA table_info(campaigns)"))
-            columns = [row[1] for row in res.fetchall()]
-            if "session_name" not in columns:
+            campaign_cols = [row[1] for row in res.fetchall()]
+            if "session_name" not in campaign_cols:
                 await conn.execute(text("ALTER TABLE campaigns ADD COLUMN session_name TEXT"))
+        except Exception:
+            pass
+
+        # 2. Auto-migration check for targets table (Phase 3 columns)
+        try:
+            res = await conn.execute(text("PRAGMA table_info(targets)"))
+            target_cols = [row[1] for row in res.fetchall()]
+            
+            migrations = [
+                ("triage_status", "ALTER TABLE targets ADD COLUMN triage_status TEXT DEFAULT 'UNCLASSIFIED'"),
+                ("triage_raw_chat", "ALTER TABLE targets ADD COLUMN triage_raw_chat TEXT"),
+                ("profile_notes", "ALTER TABLE targets ADD COLUMN profile_notes TEXT"),
+                ("profile_confidence", "ALTER TABLE targets ADD COLUMN profile_confidence INTEGER DEFAULT 0"),
+                ("source_group", "ALTER TABLE targets ADD COLUMN source_group TEXT"),
+                ("handoff_status", "ALTER TABLE targets ADD COLUMN handoff_status TEXT"),
+                ("handoff_attempts", "ALTER TABLE targets ADD COLUMN handoff_attempts INTEGER DEFAULT 0"),
+                ("handoff_last_attempt", "ALTER TABLE targets ADD COLUMN handoff_last_attempt DATETIME"),
+            ]
+            
+            for col_name, sql_stmt in migrations:
+                if col_name not in target_cols:
+                    await conn.execute(text(sql_stmt))
         except Exception:
             pass

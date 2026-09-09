@@ -46,4 +46,25 @@ class SimulatorClient(BaseClient):
         }
         return await self._request("POST", "/api/v1/telethon/dm", json=payload)
 
+    async def push_reply_webhook(
+        self,
+        session_name: str,
+        from_username: str,
+        from_user_id: int,
+        message_text: str
+    ) -> dict:
+        """
+        Helper method used by Simulator to forward inbound Telethon DMs to Mister DM.
+        Calls POST http://localhost:8013/api/v1/webhook/reply
+        """
+        payload = {
+            "session_name": session_name,
+            "from_username": from_username,
+            "from_user_id": from_user_id,
+            "message_text": message_text
+        }
+        # Local DM API Webhook URL
+        dm_webhook_url = f"http://localhost:{config.DM_API_PORT}/api/v1/webhook/reply"
+        return await self._request("POST", "/api/v1/webhook/reply", json=payload)
+
 simulator_client = SimulatorClient()

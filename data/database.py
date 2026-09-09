@@ -48,3 +48,12 @@ async def init_db():
                     await conn.execute(text(sql_stmt))
         except Exception:
             pass
+
+        # 3. Auto-migration check for messages table (template_id column for analytics)
+        try:
+            res = await conn.execute(text("PRAGMA table_info(messages)"))
+            msg_cols = [row[1] for row in res.fetchall()]
+            if "template_id" not in msg_cols:
+                await conn.execute(text("ALTER TABLE messages ADD COLUMN template_id INTEGER"))
+        except Exception:
+            pass

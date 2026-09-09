@@ -22,7 +22,13 @@ class MessageLog(Base):
     text = Column(String, nullable=True)
     timestamp = Column(DateTime, default=func.now())
 
+    # Phase 5: Template performance tracking
+    # Stores which template was used for OUTBOUND messages so Phase 8 can
+    # compute reply rates per template (e.g. Template #2 → 24% reply rate)
+    template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
+
     # Relationships
     target = relationship("Target", backref="messages")
     account = relationship("Account", backref="messages")
     campaign = relationship("Campaign", backref="messages")
+    template = relationship("Template", backref="messages")

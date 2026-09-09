@@ -9,6 +9,7 @@ from api.routes.health import router as health_router
 from api.routes.campaigns import router as campaigns_router
 from api.routes.leads import router as leads_router
 from api.routes.stats import router as stats_router
+from api.routes.webhook import router as webhook_router
 
 app = FastAPI(
     title="Mister DM API",
@@ -24,8 +25,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. Public endpoints (no API key required)
+# 1. Public endpoints (no X-API-Key required — server-to-server webhook & health check)
 app.include_router(health_router, prefix="/api/v1")
+app.include_router(webhook_router, prefix="/api/v1")
 
 # 2. Protected endpoints (require valid X-API-Key header)
 app.include_router(campaigns_router, prefix="/api/v1", dependencies=[Depends(verify_api_key)])

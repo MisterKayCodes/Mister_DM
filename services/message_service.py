@@ -2,7 +2,7 @@
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from data.database import AsyncSessionLocal
-from data.repositories import message_repo, target_repo
+from data.repositories import message_repo, target_repo, campaign_repo
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ def _message_to_dto(msg) -> dict:
         "direction": msg.direction,
         "message_type": msg.message_type,
         "text": msg.text,
+        "template_id": getattr(msg, "template_id", None),
         "timestamp": msg.timestamp,
         "timestamp_str": msg.timestamp.strftime('%Y-%m-%d %H:%M:%S') if msg.timestamp else "Unknown",
     }
@@ -26,30 +27,37 @@ class MessageService:
 
     @staticmethod
     async def log_message(
-        account_id: int,
         target_id: int,
         direction: str,
         message_type: str,
+        account_id: int | None = None,
         text: str | None = None,
         telegram_message_id: int | None = None,
+        template_id: int | None = None,
         session: AsyncSession = None
     ) -> tuple[bool, dict | str]:
-        """Logs a message. Fetches campaign_id from target automatically."""
+        """Logs a message. Resolves campaign_id and account_id from target/campaign cleanly if available."""
         async def _execute(sess: AsyncSession):
-            # Resolve campaign_id from target for denormalization
             target = await target_repo.get_target_by_id(sess, target_id)
             if not target:
                 return False, "Target not found"
-            
+
+            resolved_account_id = account_id
+            if resolved_account_id is None and target.campaign_id:
+                campaign = await campaign_repo.get_campaign_by_id(sess, target.campaign_id)
+                if campaign and campaign.account_id:
+                    resolved_account_id = campaign.account_id
+
             msg = await message_repo.insert_message(
                 session=sess,
-                account_id=account_id,
+                account_id=resolved_account_id,
                 target_id=target_id,
                 direction=direction,
                 message_type=message_type,
                 text=text,
                 telegram_message_id=telegram_message_id,
-                campaign_id=target.campaign_id
+                campaign_id=target.campaign_id,
+                template_id=template_id
             )
             return True, _message_to_dto(msg)
 

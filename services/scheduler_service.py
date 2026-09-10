@@ -5,9 +5,13 @@ from services.campaign_service import CampaignService
 from services.target_service import TargetService
 from services.template_service import TemplateService
 from services.account_service import AccountService
+from services.blacklist_service import BlacklistService
+from services.message_service import MessageService
 from services.telethon_client import send_outreach_message
 from clients.simulator_client import simulator_client
 from clients.exceptions import APIUnavailableError, APIResponseError
+from data.database import AsyncSessionLocal
+from data.repositories import account_repo
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +25,7 @@ class SchedulerService:
     Manages the background execution of campaigns.
     Delegates DMs to Mister Simulator API when session_name is available,
     with fallback to local account session_string.
+    Enforces Blacklist checks, Daily Quotas, Outbound Message Logging, and explicit task cancellations.
     """
     
     # Task registry
@@ -100,7 +105,38 @@ class SchedulerService:
                     logger.info(f"[SCHEDULER] Campaign {campaign_id} completed.")
                     await CampaignService.update_campaign_status(campaign_id, "completed")
                     break
-                    
+
+                # -------------------------------------------------------------
+                # 1. Blacklist Check
+                # -------------------------------------------------------------
+                is_allowed = await BlacklistService.check_target_allowed(
+                    username=target["username"],
+                    telegram_user_id=target.get("telegram_user_id")
+                )
+                if not is_allowed:
+                    logger.info(f"[SCHEDULER] Target @{target['username']} is blacklisted. Skipping.")
+                    await TargetService.update_target_status(
+                        target_id=target["id"],
+                        new_status="skipped",
+                        telegram_user_id=None
+                    )
+                    continue
+
+                # -------------------------------------------------------------
+                # 2. Daily Quota Check (For local accounts)
+                # -------------------------------------------------------------
+                if account and account.get("id"):
+                    acc_id = account["id"]
+                    async with AsyncSessionLocal() as session:
+                        await account_repo.reset_daily_counter_if_needed(session, acc_id)
+                        remaining = await account_repo.get_remaining_quota(session, acc_id)
+                        await session.commit()
+
+                    if remaining <= 0:
+                        logger.warning(f"[SCHEDULER] Account {acc_id} hit daily quota limit. Pausing campaign {campaign_id}.")
+                        await CampaignService.update_campaign_status(campaign_id, "paused")
+                        break
+
                 templates = await TemplateService.get_templates_by_campaign(campaign_id)
                 if not templates:
                     logger.info(f"[SCHEDULER] Campaign {campaign_id} has no templates. Stopping.")
@@ -109,8 +145,9 @@ class SchedulerService:
                     
                 template = random.choice(templates)
                 message_text = template["content"]
+                template_id = template["id"]
                 
-                logger.info(f"[SCHEDULER] Processing target {target['username']}...")
+                logger.info(f"[SCHEDULER] Processing target @{target['username']} with Template #{template_id}...")
                 
                 success = False
                 resolved_user_id = None
@@ -148,7 +185,29 @@ class SchedulerService:
                     new_status=new_status, 
                     telegram_user_id=resolved_user_id if success else None
                 )
-                
+
+                # -------------------------------------------------------------
+                # 3. Log Outbound Message (With Template ID Attribution!)
+                # -------------------------------------------------------------
+                if success:
+                    acc_id = account.get("id") if account else campaign.get("account_id")
+                    ok_log, log_res = await MessageService.log_message(
+                        target_id=target["id"],
+                        direction="OUTBOUND",
+                        message_type="TEXT",
+                        account_id=acc_id,
+                        text=message_text,
+                        telegram_message_id=resolved_user_id,
+                        template_id=template_id
+                    )
+                    if not ok_log:
+                        logger.error(f"[SCHEDULER] Failed to log outbound message for target {target['id']}: {log_res}")
+
+                    if account and account.get("id"):
+                        async with AsyncSessionLocal() as session:
+                            await account_repo.increment_daily_counter(session, account["id"])
+                            await session.commit()
+
                 campaign_check = await CampaignService.get_campaign_by_id(campaign_id)
                 if campaign_check and campaign_check["status"] != "running":
                     logger.info(f"[SCHEDULER] Campaign {campaign_id} soft-paused. Exiting before sleep.")
@@ -161,8 +220,11 @@ class SchedulerService:
                 logger.info(f"[SCHEDULER] Sleeping for {sleep_time} seconds...")
                 await asyncio.sleep(sleep_time)
                 
+        except asyncio.CancelledError:
+            logger.info(f"[SCHEDULER] Campaign {campaign_id} loop received Cancellation signal. Exiting cleanly.")
+            raise
         except Exception as e:
-            logger.error(f"[SCHEDULER] Fatal error in campaign {campaign_id}: {e}")
+            logger.error(f"[SCHEDULER] Fatal error in campaign {campaign_id}: {e}", exc_info=True)
             await CampaignService.update_campaign_status(campaign_id, "stopped")
         finally:
             SchedulerService.active_campaigns.pop(campaign_id, None)
@@ -178,6 +240,10 @@ class SchedulerService:
             return False, f"Campaign is currently {campaign['status']}, not running.", campaign["status"]
             
         await CampaignService.update_campaign_status(campaign_id, "paused")
+        task = SchedulerService.active_campaigns.pop(campaign_id, None)
+        if task:
+            task.cancel()
+
         updated = await CampaignService.get_campaign_by_id(campaign_id)
         return True, "Campaign paused.", updated["status"] if updated else "paused"
 
@@ -188,5 +254,23 @@ class SchedulerService:
             return False, "Campaign not found.", "unknown"
             
         await CampaignService.update_campaign_status(campaign_id, "stopped")
+        task = SchedulerService.active_campaigns.pop(campaign_id, None)
+        if task:
+            task.cancel()
+
         updated = await CampaignService.get_campaign_by_id(campaign_id)
         return True, "Campaign stopped.", updated["status"] if updated else "stopped"
+
+    @staticmethod
+    async def stop_all():
+        """Cleanly cancels all running campaign tasks on server shutdown."""
+        campaign_ids = list(SchedulerService.active_campaigns.keys())
+        for cid in campaign_ids:
+            task = SchedulerService.active_campaigns.pop(cid, None)
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        logger.info("[SCHEDULER] All active campaigns cleanly stopped.")

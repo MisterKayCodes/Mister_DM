@@ -9,6 +9,7 @@ from data.models.target import Target
 from sqlalchemy import select
 from sqlalchemy.sql import func
 from services.triage_service import TriageService
+from services.message_service import MessageService
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class ReplyWebhookPayload(BaseModel):
 async def receive_reply(payload: ReplyWebhookPayload):
     """
     Inbound webhook called by Mister Simulator when a dm_warrior session receives a reply.
-    Updates target status to 'replied' and fires Groq triage classification in background.
+    Updates target status to 'replied', logs INBOUND message, and fires Groq triage in background.
     """
     clean_username = payload.from_username.lstrip("@").strip()
     
@@ -69,7 +70,21 @@ async def receive_reply(payload: ReplyWebhookPayload):
         target_username = target.username
         logger.info(f"[WEBHOOK] @{target_username} (ID: {target_id}) marked as replied. Firing triage...")
 
-    # 3. Fire triage in background (non-blocking — doesn't hold up the webhook response)
+        # 3. Log inbound reply message
+        ok_log, log_res = await MessageService.log_message(
+            target_id=target_id,
+            direction="INBOUND",
+            message_type="TEXT",
+            text=payload.message_text,
+            telegram_message_id=None,
+            session=session
+        )
+        if not ok_log:
+            logger.error(f"[WEBHOOK] Failed to log inbound reply message for @{target_username}: {log_res}")
+        else:
+            await session.commit()
+
+    # 4. Fire triage in background (non-blocking)
     asyncio.create_task(TriageService.classify_lead(target_id, payload.message_text))
 
     return {

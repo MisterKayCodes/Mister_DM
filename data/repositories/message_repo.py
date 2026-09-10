@@ -6,13 +6,14 @@ from data.models.message import MessageLog
 
 async def insert_message(
     session: AsyncSession,
-    account_id: int,
     target_id: int,
     direction: str,
     message_type: str,
+    account_id: int | None = None,
     text: str | None = None,
     telegram_message_id: int | None = None,
     campaign_id: int | None = None,
+    template_id: int | None = None,
 ) -> MessageLog:
     """Inserts a new message log. Caller must commit."""
     msg = MessageLog(
@@ -22,7 +23,8 @@ async def insert_message(
         message_type=message_type,
         text=text,
         telegram_message_id=telegram_message_id,
-        campaign_id=campaign_id
+        campaign_id=campaign_id,
+        template_id=template_id
     )
     session.add(msg)
     await session.flush()

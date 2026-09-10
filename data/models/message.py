@@ -9,7 +9,7 @@ class MessageLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     telegram_message_id = Column(Integer, nullable=True)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=True)
     target_id = Column(Integer, ForeignKey("targets.id"), nullable=False)
     

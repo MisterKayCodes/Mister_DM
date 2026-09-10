@@ -6,9 +6,14 @@ from data.models.campaign import Campaign
 
 # Repo is dumb: no commits, no rollbacks, no business logic.
 
-async def insert_campaign(session: AsyncSession, name: str, account_id: int) -> Campaign:
+async def insert_campaign(
+    session: AsyncSession, 
+    name: str, 
+    account_id: int | None = None, 
+    session_name: str | None = None
+) -> Campaign:
     """Inserts a new campaign. Caller must commit."""
-    campaign = Campaign(name=name, account_id=account_id, status="draft")
+    campaign = Campaign(name=name, account_id=account_id, session_name=session_name, status="draft")
     session.add(campaign)
     await session.flush()  # Get ID without committing
     return campaign

@@ -20,12 +20,12 @@ class ExportService:
         """
         async def _execute(sess: AsyncSession):
             # 1. Fetch Target
-            target = await TargetService.get_target_by_id(target_id, sess)
+            target = await TargetService.get_target_by_id(target_id, session=sess)
             if not target:
                 return False, "Target not found."
                 
             # 2. Fetch Messages
-            messages = await MessageService.get_messages_for_target(target_id, sess)
+            messages = await MessageService.get_messages_for_target(target_id, session=sess)
             if not messages:
                 return False, "No messages found for this target."
                 
@@ -46,18 +46,17 @@ class ExportService:
         """
         async def _execute(sess: AsyncSession):
             # 1. Fetch Campaign
-            campaign = await CampaignService.get_campaign_by_id(campaign_id, sess)
+            campaign = await CampaignService.get_campaign_by_id(campaign_id, session=sess)
             if not campaign:
                 return False, "Campaign not found."
                 
             # 2. Fetch Messages
-            messages = await MessageService.get_messages_for_campaign(campaign_id, sess)
+            messages = await MessageService.get_messages_for_campaign(campaign_id, session=sess)
             if not messages:
                 return False, "No messages found for this campaign."
                 
             # 3. Fetch all targets in campaign to resolve usernames
-            # We fetch all targets to map target_id -> username efficiently
-            targets = await TargetService.get_targets_by_campaign(campaign_id, sess)
+            targets = await TargetService.get_targets_by_campaign(campaign_id, session=sess)
             target_map = {t["id"]: t["username"] for t in targets}
             
             # 4. Group messages by username

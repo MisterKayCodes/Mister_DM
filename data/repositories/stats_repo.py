@@ -13,7 +13,6 @@ async def get_campaign_target_counts(session: AsyncSession, campaign_id: int) ->
         .group_by(Target.status)
     )
     rows = result.all()
-    # Build a safe dict — missing statuses default to 0
     counts = {row.status: row.count for row in rows}
     return {
         "total":   sum(counts.values()),
@@ -102,3 +101,36 @@ async def get_global_stats(session: AsyncSession) -> dict:
         "reply_rate_percent": round(reply_rate, 2),
         "failure_rate_percent": round(failure_rate, 2)
     }
+
+
+async def get_template_performance_stats(session: AsyncSession) -> list[dict]:
+    """
+    Returns reply rate performance metrics for each opening template.
+    Joins MessageLog (OUTBOUND) with Target to measure total sent vs total replied.
+    """
+    stmt = (
+        select(
+            MessageLog.template_id,
+            func.count(MessageLog.id).label("total_sent"),
+            func.count(func.nullif(Target.status != "replied", True)).label("total_replied")
+        )
+        .join(Target, MessageLog.target_id == Target.id)
+        .where(MessageLog.direction == "OUTBOUND")
+        .where(MessageLog.template_id.isnot(None))
+        .group_by(MessageLog.template_id)
+    )
+    result = await session.execute(stmt)
+    rows = result.all()
+    
+    stats = []
+    for row in rows:
+        sent = row.total_sent or 0
+        replied = row.total_replied or 0
+        rate = round((replied / sent * 100), 2) if sent > 0 else 0.0
+        stats.append({
+            "template_id": row.template_id,
+            "total_sent": sent,
+            "total_replied": replied,
+            "reply_rate_percent": rate
+        })
+    return stats

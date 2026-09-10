@@ -27,3 +27,10 @@ async def triage_stats():
                 else:
                     counts[status_val] = count
         return {"status": "success", "data": counts}
+
+@router.get("/stats/templates")
+async def template_stats():
+    """Returns reply rate performance breakdown per opening template."""
+    async with AsyncSessionLocal() as session:
+        templates_data = await stats_repo.get_template_performance_stats(session)
+        return {"status": "success", "data": templates_data}

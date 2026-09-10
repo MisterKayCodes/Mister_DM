@@ -14,7 +14,6 @@ from bot.handlers.stats_handler import router as stats_handler
 from bot.handlers.blacklist_handler import router as blacklist_handler
 from services.campaign_service import CampaignService
 from services.account_service import AccountService
-from core.reply_listener import ReplyListener
 from core.scheduler import Scheduler
 from api.server import start_api_server
 
@@ -26,8 +25,11 @@ async def on_startup(bot: Bot):
     await CampaignService.recover_running_campaigns()
     # Reset daily counters for any account that hasn't been reset today
     await AccountService.reset_all_daily_counters_if_needed()
-    # Start persistent listeners for all active accounts
-    await ReplyListener.start_all_listeners()
+    
+    # DEPRECATED: ReplyListener disabled to prevent duplicate Telethon connections.
+    # Mister Simulator handles all Telethon listeners and pushes replies via POST /api/v1/webhook/reply
+    # await ReplyListener.start_all_listeners()
+    
     # Start FastAPI REST server background task
     asyncio.create_task(start_api_server())
     logger.info("🌐 FastAPI REST Server running on port 8013")
@@ -37,8 +39,6 @@ async def on_shutdown(bot: Bot):
     logger.info("Shutting down...")
     # Cancel all active campaign loops
     await Scheduler.stop_all()
-    # Cancel all listener connections gracefully
-    await ReplyListener.stop_all()
     await bot.session.close()
     logger.info("👋 Goodbye!")
 

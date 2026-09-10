@@ -31,10 +31,17 @@ SIMULATOR_API_KEY = os.getenv("SIMULATOR_API_KEY")
 if not SIMULATOR_API_KEY:
     raise ValueError("SIMULATOR_API_KEY is not set in the environment variables.")
 
-# Phase 4: Groq Triage Settings
+# Groq Triage Settings
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_TRIAGE_MODEL = os.getenv("GROQ_TRIAGE_MODEL", "llama-3.3-70b-versatile")
 GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", "10"))
 
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY is not set in the environment variables.")
+
+# Mister AI Integration Settings
+MISTER_AI_URL = os.getenv("MISTER_AI_URL", "http://localhost:8014")
+MISTER_AI_API_KEY = os.getenv("MISTER_AI_API_KEY")
+
+if not MISTER_AI_API_KEY:
+    raise ValueError("MISTER_AI_API_KEY is not set in the environment variables.")

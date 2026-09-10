@@ -1,14 +1,17 @@
+import asyncio
 import logging
 from data.database import AsyncSessionLocal
 from data.repositories import target_repo
 from core.triage_engine import TriageEngine
 from providers.groq_client import groq_client
+from services.handoff_service import HandoffService
 
 logger = logging.getLogger(__name__)
 
 class TriageService:
     """
     Orchestrates AI lead classification using Groq LLM and editable prompts.
+    Trigger auto-handoff initiation for RELATIONAL leads.
     """
 
     @staticmethod
@@ -16,7 +19,7 @@ class TriageService:
         """
         Classifies a lead into TRANSACTIONAL, RELATIONAL, or DEAD.
         Saves triage_status and triage_raw_chat to database.
-        Returns the classification verdict.
+        If RELATIONAL, automatically kicks off HandoffService.
         """
         async with AsyncSessionLocal() as session:
             target = await target_repo.get_target_by_id(session, target_id)
@@ -61,9 +64,15 @@ class TriageService:
                     session=session,
                     target_id=target_id,
                     triage_status=classification,
-                    raw_chat=chat_history[:500]  # Store first 500 chars snippet
+                    raw_chat=chat_history[:500]
                 )
                 await session.commit()
+
+                # 5. Auto-Handoff Trigger for RELATIONAL leads
+                if classification == "RELATIONAL":
+                    logger.info(f"[TRIAGE_SERVICE] RELATIONAL verdict detected. Triggering HandoffService for @{target.username}...")
+                    asyncio.create_task(HandoffService.initiate_handoff(target_id))
+
                 return classification
 
             except Exception as e:

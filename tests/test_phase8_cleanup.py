@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath("."))
+
 import asyncio
 import time
 import httpx
@@ -67,7 +71,7 @@ async def test_phase8_cleanup():
     # -----------------------------------------------------------------
     print("\n3. Testing Daily Quota Auto-Pause...")
     async with AsyncSessionLocal() as session:
-        acc = await account_repo.get_account_by_id(session, 1)
+        acc = await account_repo.get_account_by_name(session, "Quota_Account")
         if not acc:
             await account_repo.add_account(session, "Quota_Account", "session_str_mock", 1, 2, 1)
             acc = await account_repo.get_account_by_name(session, "Quota_Account")
@@ -75,8 +79,9 @@ async def test_phase8_cleanup():
         acc.daily_limit = 1
         acc.messages_sent_today = 1
         await session.commit()
+        quota_acc_id = acc.id
 
-        c_quota = await campaign_repo.insert_campaign(session, f"Quota_Campaign_{ts}", account_id=acc.id)
+        c_quota = await campaign_repo.insert_campaign(session, f"Quota_Campaign_{ts}", account_id=quota_acc_id)
         await session.commit()
         c_quota_id = c_quota.id
 
@@ -94,7 +99,7 @@ async def test_phase8_cleanup():
         print("--> Daily Quota Auto-Pause Test PASSED!")
 
     async with AsyncSessionLocal() as session:
-        acc = await account_repo.get_account_by_id(session, acc.id)
+        acc = await account_repo.get_account_by_id(session, quota_acc_id)
         if acc:
             acc.messages_sent_today = 0
             await session.commit()

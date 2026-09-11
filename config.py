@@ -14,8 +14,8 @@ DRY_RUN = True
 DEV_DELAY_MIN = 1
 DEV_DELAY_MAX = 3
 
-TELETHON_API_ID = os.getenv("TELETHON_API_ID", "12345")
-TELETHON_API_HASH = os.getenv("TELETHON_API_HASH", "dummy_hash")
+TELETHON_API_ID = os.getenv("TELETHON_API_ID")
+TELETHON_API_HASH = os.getenv("TELETHON_API_HASH")
 
 # API Server settings
 DM_API_PORT = int(os.getenv("DM_API_PORT", "8013"))
@@ -33,7 +33,7 @@ if not SIMULATOR_API_KEY:
 
 # Groq Triage Settings
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_TRIAGE_MODEL = os.getenv("GROQ_TRIAGE_MODEL", "llama-3.3-70b-versatile")
+GROQ_TRIAGE_MODEL = os.getenv("GROQ_TRIAGE_MODEL", "groq/compound-mini")
 GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", "10"))
 
 if not GROQ_API_KEY:

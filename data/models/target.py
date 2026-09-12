@@ -27,10 +27,19 @@ class Target(Base):
     handoff_attempts = Column(Integer, default=0, nullable=False)
     handoff_last_attempt = Column(DateTime, nullable=True)
 
+    # Phase 2: Deep Relational & Engine Additions
+    trust_score = Column(Integer, default=0, nullable=False)
+    timezone = Column(String, default="Unknown", nullable=False)
+    goal = Column(String, nullable=True)
+    mirror_profile_json = Column(Text, nullable=True)
+    assigned_persona_id = Column(Integer, ForeignKey("personas.id"), nullable=True)
+
     campaign = relationship("Campaign", back_populates="targets")
     pain_tags = relationship("PainTag", secondary="target_pain_tags", back_populates="targets")
+    persona = relationship("Persona", back_populates="targets")
 
     # Uniqueness is enforced at the database level, not in application code.
     __table_args__ = (
         UniqueConstraint('campaign_id', 'username', name='uix_campaign_username'),
+        UniqueConstraint('campaign_id', 'telegram_user_id', name='uix_campaign_tg_id'),
     )

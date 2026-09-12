@@ -1,30 +1,30 @@
 import httpx
 import logging
 import config
+from providers.groq_pool import groq_pool
 
 logger = logging.getLogger(__name__)
 
 class GroqClient:
     """
-    Client for Groq LLM API (llama-3.3-70b-versatile).
-    Includes automatic fallback mock mode when using placeholder API key.
+    Client for Groq LLM API.
+    Uses groq_pool for round-robin key rotation and automatic rate-limit cooldown tracking.
     """
     def __init__(self):
-        self.api_key = config.GROQ_API_KEY
         self.model = config.GROQ_TRIAGE_MODEL
         self.max_tokens = config.GROQ_MAX_TOKENS
         self.base_url = "https://api.groq.com/openai/v1/chat/completions"
 
-    def _is_placeholder(self) -> bool:
-        return not self.api_key or "placeholder" in self.api_key.lower() or not self.api_key.startswith("gsk_")
+    def _is_placeholder(self, api_key: str) -> bool:
+        return not api_key or "placeholder" in api_key.lower() or not api_key.startswith("gsk_")
 
     async def chat_complete(self, system_prompt: str, user_prompt: str) -> str:
         """
-        Sends a completion request to Groq LLM API.
-        Returns the raw model completion string.
+        Sends a completion request to Groq API using key pool.
         """
-        # Mock mode fallback for testing without real key
-        if self._is_placeholder():
+        active_key = groq_pool.get_next_key()
+
+        if self._is_placeholder(active_key):
             logger.info("[GROQ_CLIENT] Operating in Mock Mode (Placeholder API Key detected)")
             text = user_prompt.lower()
             if any(k in text for k in ["price", "buy", "tool", "cost", "software", "signal", "account"]):
@@ -35,7 +35,7 @@ class GroqClient:
                 return "DEAD"
 
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {active_key}",
             "Content-Type": "application/json"
         }
         
@@ -59,6 +59,9 @@ class GroqClient:
                 if response.status_code == 200:
                     data = response.json()
                     return data["choices"][0]["message"]["content"].strip()
+                elif response.status_code == 429:
+                    groq_pool.mark_cooling(active_key, cooldown_seconds=60)
+                    logger.warning(f"[GROQ_CLIENT] Rate limited (429) on key ...{active_key[-4:]}. Marked cooling.")
                 else:
                     logger.warning(f"[GROQ_CLIENT] Groq API returned status {response.status_code}. Falling back to default.")
         except Exception as exc:
@@ -81,15 +84,16 @@ class GroqClient:
         temperature: float = 0.7
     ) -> str:
         """
-        Sends multi-turn chat completions request to Groq API.
-        messages_history should be a list of dicts: [{"role": "user"|"assistant", "content": "..."}]
+        Sends multi-turn chat completions request to Groq API using key pool.
         """
-        if self._is_placeholder():
+        active_key = groq_pool.get_next_key()
+
+        if self._is_placeholder(active_key):
             logger.info("[GROQ_CLIENT] Roleplay operating in Mock Mode (Placeholder Key)")
             return '{\n  "intent": "Mock response generated for testing.",\n  "confidence_score": 90,\n  "needs_human": false,\n  "message": "Hey! That is super interesting. Tell me more about what you do."\n}'
 
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {active_key}",
             "Content-Type": "application/json"
         }
 
@@ -114,6 +118,9 @@ class GroqClient:
                 if response.status_code == 200:
                     data = response.json()
                     return data["choices"][0]["message"]["content"].strip()
+                elif response.status_code == 429:
+                    groq_pool.mark_cooling(active_key, cooldown_seconds=60)
+                    logger.warning(f"[GROQ_CLIENT] Rate limited (429) on roleplay key ...{active_key[-4:]}. Marked cooling.")
                 else:
                     logger.warning(f"[GROQ_CLIENT] Groq API returned status {response.status_code}: {response.text}. Falling back to mock roleplay.")
         except Exception as exc:

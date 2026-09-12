@@ -199,3 +199,34 @@ async def get_failed_handoffs(session: AsyncSession) -> list[Target]:
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def update_target_relational_data(
+    session: AsyncSession,
+    target_id: int,
+    trust_score: int | None = None,
+    timezone: str | None = None,
+    goal: str | None = None,
+    mirror_profile_json: str | None = None,
+    assigned_persona_id: int | None = None
+) -> int:
+    """Updates relational engine fields on a target."""
+    update_data = {}
+    if trust_score is not None:
+        update_data["trust_score"] = trust_score
+    if timezone is not None:
+        update_data["timezone"] = timezone
+    if goal is not None:
+        update_data["goal"] = goal
+    if mirror_profile_json is not None:
+        update_data["mirror_profile_json"] = mirror_profile_json
+    if assigned_persona_id is not None:
+        update_data["assigned_persona_id"] = assigned_persona_id
+
+    if not update_data:
+        return 0
+
+    stmt = update(Target).where(Target.id == target_id).values(**update_data)
+    result = await session.execute(stmt)
+    return result.rowcount
+

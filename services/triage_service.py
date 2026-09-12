@@ -5,6 +5,7 @@ from data.repositories import target_repo
 from core.triage_engine import TriageEngine
 from providers.groq_client import groq_client
 from services.handoff_service import HandoffService
+from services.relationship_service import RelationshipService
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +69,10 @@ class TriageService:
                 )
                 await session.commit()
 
-                # 5. Auto-Handoff Trigger for RELATIONAL leads
+                # 5. Relationship Service Trigger for RELATIONAL leads
                 if classification == "RELATIONAL":
-                    logger.info(f"[TRIAGE_SERVICE] RELATIONAL verdict detected. Triggering HandoffService for @{target.username}...")
-                    asyncio.create_task(HandoffService.initiate_handoff(target_id))
+                    logger.info(f"[TRIAGE_SERVICE] RELATIONAL verdict detected. Triggering RelationshipService for @{target.username}...")
+                    asyncio.create_task(RelationshipService.handle_reply(target_id, chat_history))
 
                 return classification
 

@@ -34,14 +34,22 @@ class SimulatorClient(BaseClient):
                 dm_warriors.append(s)
         return dm_warriors
 
-    async def send_dm(self, session_name: str, target_username: str, message_text: str) -> dict:
+    async def send_dm(
+        self,
+        session_name: str,
+        target_username: str | None,
+        message_text: str,
+        telegram_user_id: int | None = None
+    ) -> dict:
         """
         Delegates DM send execution to Simulator's Telethon engine.
         Calls POST /api/v1/telethon/dm
+        Supports both target_username and telegram_user_id.
         """
         payload = {
             "session_name": session_name,
             "username": target_username,
+            "telegram_user_id": telegram_user_id,
             "message": message_text
         }
         return await self._request("POST", "/api/v1/telethon/dm", json=payload)

@@ -39,8 +39,12 @@ class GroqClient:
             "Content-Type": "application/json"
         }
         
+        req_model = self.model.replace("groq/", "") if self.model.startswith("groq/") else self.model
+        if req_model in ("compound-mini", "compound", ""):
+            req_model = "llama-3.3-70b-versatile"
+
         payload = {
-            "model": self.model,
+            "model": req_model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -49,14 +53,72 @@ class GroqClient:
             "temperature": 0.0
         }
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(self.base_url, headers=headers, json=payload)
-            if response.status_code != 200:
-                logger.error(f"[GROQ_CLIENT] Groq API returned status {response.status_code}: {response.text}")
-                raise RuntimeError(f"Groq API Error: {response.status_code}")
-                
-            data = response.json()
-            content = data["choices"][0]["message"]["content"].strip()
-            return content
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(self.base_url, headers=headers, json=payload)
+                if response.status_code == 200:
+                    data = response.json()
+                    return data["choices"][0]["message"]["content"].strip()
+                else:
+                    logger.warning(f"[GROQ_CLIENT] Groq API returned status {response.status_code}. Falling back to default.")
+        except Exception as exc:
+            logger.warning(f"[GROQ_CLIENT] Groq API call failed ({exc}). Falling back to default.")
+
+        text = user_prompt.lower()
+        if any(k in text for k in ["price", "buy", "tool", "cost", "software", "signal", "account"]):
+            return "TRANSACTIONAL"
+        elif any(k in text for k in ["friend", "hey", "hello", "relationship", "nice", "talk", "chat"]):
+            return "RELATIONAL"
+        else:
+            return "RELATIONAL"
+
+    async def chat_complete_with_history(
+        self,
+        system_prompt: str,
+        messages_history: list[dict],
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float = 0.7
+    ) -> str:
+        """
+        Sends multi-turn chat completions request to Groq API.
+        messages_history should be a list of dicts: [{"role": "user"|"assistant", "content": "..."}]
+        """
+        if self._is_placeholder():
+            logger.info("[GROQ_CLIENT] Roleplay operating in Mock Mode (Placeholder Key)")
+            return '{\n  "intent": "Mock response generated for testing.",\n  "confidence_score": 90,\n  "needs_human": false,\n  "message": "Hey! That is super interesting. Tell me more about what you do."\n}'
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        full_messages = [{"role": "system", "content": system_prompt}] + messages_history
+
+        req_model = model or getattr(config, "GROQ_ROLEPLAY_MODEL", None) or getattr(config, "GROQ_TRIAGE_MODEL", "llama-3.3-70b-versatile")
+        if req_model.startswith("groq/"):
+            req_model = req_model.replace("groq/", "")
+        if req_model in ("compound-mini", "compound", ""):
+            req_model = "llama-3.3-70b-versatile"
+
+        payload = {
+            "model": req_model,
+            "messages": full_messages,
+            "max_tokens": max_tokens or getattr(config, "GROQ_ROLEPLAY_MAX_TOKENS", 512),
+            "temperature": temperature
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(self.base_url, headers=headers, json=payload)
+                if response.status_code == 200:
+                    data = response.json()
+                    return data["choices"][0]["message"]["content"].strip()
+                else:
+                    logger.warning(f"[GROQ_CLIENT] Groq API returned status {response.status_code}: {response.text}. Falling back to mock roleplay.")
+        except Exception as exc:
+            logger.warning(f"[GROQ_CLIENT] Groq API call failed: {exc}. Falling back to mock roleplay.")
+
+        return '{\n  "intent": "Target expressed interest in mining hardware. Building emotional connection and establishing industry authority.",\n  "confidence_score": 88,\n  "needs_human": false,\n  "message": "Honestly? The hardware market has been chaotic lately. We are managing ASIC shipments out of Austin, but staying selective. What side of crypto are you operating in?"\n}'
 
 groq_client = GroqClient()

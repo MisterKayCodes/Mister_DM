@@ -14,3 +14,4 @@ from .intel_entry import IntelEntry
 from .relationship_chat import RelationshipChat
 from .relationship_message import RelationshipMessage
 from .ai_intent import AIIntent
+from .mirror_observation_buffer import MirrorObservationBuffer

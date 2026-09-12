@@ -105,6 +105,18 @@ class RelationshipService:
             except Exception as exc:
                 logger.warning(f"[RELATIONSHIP_SERVICE] Topic classification skipped ({exc})")
 
+            # Process NLP Mirroring via IntelligenceService
+            mirror_profile = None
+            try:
+                from services.intelligence_service import intelligence_service
+                mirror_profile = await intelligence_service.process_inbound_message(
+                    session=session,
+                    target_id=target_id,
+                    message_text=inbound_message
+                )
+            except Exception as exc:
+                logger.warning(f"[RELATIONSHIP_SERVICE] IntelligenceService processing failed: {exc}")
+
             # 3. Build System Prompt
             system_prompt = build_roleplay_prompt(
                 persona=persona,
@@ -114,6 +126,15 @@ class RelationshipService:
                 selected_lore=selected_lore,
                 goal=chat.goal or ""
             )
+
+            # Inject Communication Style Mirroring instructions if profile exists
+            if mirror_profile:
+                style_str = json.dumps(mirror_profile, indent=2)
+                system_prompt += (
+                    "\n\n### COMMUNICATION STYLE MIRRORING PROFILE ###\n"
+                    "Match the user's communication style formatting and mannerisms based on this profile:\n"
+                    f"{style_str}\n"
+                )
 
             # 4. Format history list & Call Groq
             history_payload = [

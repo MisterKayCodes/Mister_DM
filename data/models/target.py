@@ -32,6 +32,7 @@ class Target(Base):
     timezone = Column(String, default="Unknown", nullable=False)
     goal = Column(String, nullable=True)
     mirror_profile_json = Column(Text, nullable=True)
+    mirror_confidence = Column(Integer, default=0, nullable=False)
     assigned_persona_id = Column(Integer, ForeignKey("personas.id"), nullable=True)
 
     campaign = relationship("Campaign", back_populates="targets")

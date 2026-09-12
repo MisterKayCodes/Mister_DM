@@ -208,6 +208,7 @@ async def update_target_relational_data(
     timezone: str | None = None,
     goal: str | None = None,
     mirror_profile_json: str | None = None,
+    mirror_confidence: int | None = None,
     assigned_persona_id: int | None = None
 ) -> int:
     """Updates relational engine fields on a target."""
@@ -220,6 +221,8 @@ async def update_target_relational_data(
         update_data["goal"] = goal
     if mirror_profile_json is not None:
         update_data["mirror_profile_json"] = mirror_profile_json
+    if mirror_confidence is not None:
+        update_data["mirror_confidence"] = mirror_confidence
     if assigned_persona_id is not None:
         update_data["assigned_persona_id"] = assigned_persona_id
 

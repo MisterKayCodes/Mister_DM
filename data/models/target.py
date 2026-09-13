@@ -41,6 +41,9 @@ class Target(Base):
     # Phase 9: Profiler Pipeline
     lead_type = Column(String, default="LURKER", nullable=False)
 
+    # Phase 10: Session Lock (which DM Warrior account owns this lead)
+    assigned_session = Column(String, nullable=True)
+
     campaign = relationship("Campaign", back_populates="targets")
     pain_tags = relationship("PainTag", secondary="target_pain_tags", back_populates="targets")
     persona = relationship("Persona", back_populates="targets")

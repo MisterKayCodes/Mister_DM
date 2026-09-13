@@ -269,10 +269,11 @@ class RelationshipService:
 
             # 9. Send reply via Mister Simulator BEFORE committing assistant message to history
             send_success = False
+            send_session_name = target.assigned_session or session_name
             try:
-                logger.info(f"[RELATIONSHIP_SERVICE] Sending response to @{target.username} via Simulator...")
+                logger.info(f"[RELATIONSHIP_SERVICE] Sending response to @{target.username} via Simulator session '{send_session_name}'...")
                 send_result = await simulator_client.send_dm(
-                    session_name=session_name,
+                    session_name=send_session_name,
                     target_username=target.username,
                     message_text=reply_text,
                     telegram_user_id=target.telegram_user_id

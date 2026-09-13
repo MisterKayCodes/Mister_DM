@@ -56,11 +56,10 @@ class SchedulerService:
             if account_id:
                 account = await AccountService.get_account_by_id(account_id)
             
-            # If no local account, attempt to borrow a dm_warrior session from Simulator
+            # If no local account, attempt to borrow a dm_warrior session from Simulator (load balanced)
             if not account:
-                dm_warriors = await simulator_client.get_dm_warrior_sessions()
-                if dm_warriors:
-                    session_name = dm_warriors[0].get("name") or dm_warriors[0].get("session_name")
+                persona_tag = campaign.get("session_name") or "elena"
+                session_name = await simulator_client.get_least_loaded_dm_warrior(persona_tag=persona_tag)
                 
             if not session_name and not account:
                 return False, "No active Simulator session or local account assigned to campaign.", campaign["status"]
@@ -187,7 +186,14 @@ class SchedulerService:
                 resolved_message_id = None
                 
                 # Delegation Path A: Mister Simulator API
-                target_session = session_name or campaign.get("session_name")
+                target_session = target.get("assigned_session") or session_name or campaign.get("session_name")
+                
+                # If target_session is a generic persona tag (e.g. 'elena'), pick the least loaded clone
+                if target_session and not "_" in target_session and target_session.isalpha():
+                    picked_clone = await simulator_client.get_least_loaded_dm_warrior(persona_tag=target_session)
+                    if picked_clone:
+                        target_session = picked_clone
+
                 if target_session:
                     try:
                         res = await simulator_client.send_dm(
@@ -221,6 +227,11 @@ class SchedulerService:
                     new_status=new_status, 
                     telegram_user_id=resolved_user_id if success else None
                 )
+
+                # Phase 10: Bond target to assigned_session permanently on successful first send
+                if success and target_session:
+                    await TargetService.set_assigned_session(target["id"], target_session)
+                    logger.info(f"[SCHEDULER] Bonded target @{target['username']} to session '{target_session}'")
 
                 # -------------------------------------------------------------
                 # 3. Log Outbound Message (With Template ID Attribution!)

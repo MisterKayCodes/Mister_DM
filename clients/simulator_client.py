@@ -21,18 +21,57 @@ class SimulatorClient(BaseClient):
         except Exception:
             return False
 
-    async def get_dm_warrior_sessions(self) -> list[dict]:
-        """Fetches all active sessions tagged with 'dm_warrior' role."""
+    async def get_dm_warrior_sessions(self, persona_tag: str | None = None) -> list[dict]:
+        """Fetches all active sessions tagged with 'dm_warrior' role, optionally matching persona_tag prefix."""
         res = await self._request("GET", "/api/v1/sessions")
-        sessions = res.get("data", []) if isinstance(res, dict) else res
+        sessions = res.get("sessions", []) if isinstance(res, dict) and "sessions" in res else (res.get("data", []) if isinstance(res, dict) else res)
         
-        # Filter for dm_warrior role
+        # Filter for dm_warrior role and optional persona_tag prefix (e.g. "elena_" or "marcus_")
         dm_warriors = []
         for s in sessions:
-            roles = s.get("roles", [])
-            if "dm_warrior" in roles and s.get("is_active", True):
-                dm_warriors.append(s)
+            roles = s.get("roles", ["dm_warrior"]) # fallback to treating session as warrior if listed
+            s_name = s.get("session_name") or s.get("name", "")
+            
+            # Match role
+            is_warrior = "dm_warrior" in roles or not roles
+            if is_warrior and s.get("is_active", True):
+                if persona_tag:
+                    clean_tag = persona_tag.lower().strip()
+                    if s_name.lower().startswith(clean_tag):
+                        dm_warriors.append(s)
+                else:
+                    dm_warriors.append(s)
         return dm_warriors
+
+    async def get_least_loaded_dm_warrior(self, persona_tag: str | None = None) -> str | None:
+        """
+        Finds all active DM Warriors matching the persona_tag (e.g., 'elena'),
+        queries Mister DM database for each warrior's active target load,
+        and returns the session_name of the warrior with the lowest load.
+        """
+        from services.target_service import TargetService
+        
+        warriors = await self.get_dm_warrior_sessions(persona_tag=persona_tag)
+        if not warriors and persona_tag:
+            # Fallback to any active warrior if no tag prefix match
+            warriors = await self.get_dm_warrior_sessions(persona_tag=None)
+            
+        if not warriors:
+            return None
+            
+        lowest_load = float("inf")
+        best_session = None
+        
+        for w in warriors:
+            s_name = w.get("session_name") or w.get("name")
+            if not s_name:
+                continue
+            load = await TargetService.get_session_active_load(s_name)
+            if load < lowest_load:
+                lowest_load = load
+                best_session = s_name
+                
+        return best_session or (warriors[0].get("session_name") or warriors[0].get("name"))
 
     async def send_dm(
         self,
@@ -43,16 +82,25 @@ class SimulatorClient(BaseClient):
     ) -> dict:
         """
         Delegates DM send execution to Simulator's Telethon engine.
-        Calls POST /api/v1/telethon/dm
+        Calls POST /api/v1/telethon/send-message
         Supports both target_username and telegram_user_id.
         """
         payload = {
             "session_name": session_name,
-            "username": target_username,
-            "telegram_user_id": telegram_user_id,
-            "message": message_text
+            "target": target_username or str(telegram_user_id),
+            "text": message_text
         }
-        return await self._request("POST", "/api/v1/telethon/dm", json=payload)
+        res = await self._request("POST", "/api/v1/telethon/send-message", json=payload)
+        
+        # Normalize the Simulator's response shape for Mister DM
+        is_success = res.get("success", False)
+        return {
+            "status": "success" if is_success else "error",
+            "ok": is_success,
+            "message_id": res.get("message_id"),
+            "user_id": telegram_user_id,
+            "telegram_user_id": telegram_user_id
+        }
 
     async def push_reply_webhook(
         self,

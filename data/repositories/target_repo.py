@@ -316,3 +316,14 @@ async def ingest_deepseek_profiles(session: AsyncSession, campaign_id: int, prof
     return active_count, lurker_count
 
 
+async def get_session_active_load(session: AsyncSession, session_name: str) -> int:
+    """Returns the count of active/sent/replied targets bonded to a given session."""
+    stmt = (
+        select(func.count())
+        .where(
+            Target.assigned_session == session_name,
+            Target.status.in_(["sent", "replied"])
+        )
+    )
+    res = await session.execute(stmt)
+    return res.scalar() or 0

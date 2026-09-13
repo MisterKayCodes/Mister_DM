@@ -280,3 +280,30 @@ class TargetService:
                     await new_sess.rollback()
                     return {"success": False, "message": str(e)}
         return await _execute(session)
+
+    @staticmethod
+    async def get_session_active_load(session_name: str, session: AsyncSession = None) -> int:
+        async def _execute(sess: AsyncSession):
+            return await target_repo.get_session_active_load(sess, session_name)
+
+        if session is None:
+            async with AsyncSessionLocal() as new_sess:
+                return await _execute(new_sess)
+        return await _execute(session)
+
+    @staticmethod
+    async def set_assigned_session(target_id: int, session_name: str, session: AsyncSession = None) -> bool:
+        async def _execute(sess: AsyncSession):
+            rows = await target_repo.update_target(sess, target_id, {"assigned_session": session_name})
+            return rows > 0
+
+        if session is None:
+            async with AsyncSessionLocal() as new_sess:
+                try:
+                    res = await _execute(new_sess)
+                    await new_sess.commit()
+                    return res
+                except Exception as e:
+                    await new_sess.rollback()
+                    return False
+        return await _execute(session)

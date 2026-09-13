@@ -58,17 +58,26 @@ async def receive_reply(payload: ReplyWebhookPayload):
             logger.warning(f"[WEBHOOK] Inbound reply from @{clean_username} — no matching sent target found. Ignoring.")
             return {"status": "ignored", "reason": "No matching sent target found"}
 
-        # 2. Update status to replied
+        # 2. Update status to replied and verify/lock assigned_session
         target.status = "replied"
         target.replied_at = func.now()
         if payload.from_user_id:
             target.telegram_user_id = payload.from_user_id
+            
+        if payload.session_name:
+            if target.assigned_session and target.assigned_session != payload.session_name:
+                logger.warning(
+                    f"[WEBHOOK] Session mismatch for @{target.username}: "
+                    f"bonded to '{target.assigned_session}', reply came via '{payload.session_name}'."
+                )
+            else:
+                target.assigned_session = payload.session_name
         
         await session.commit()
         
         target_id = target.id
         target_username = target.username
-        logger.info(f"[WEBHOOK] @{target_username} (ID: {target_id}) marked as replied. Firing triage...")
+        logger.info(f"[WEBHOOK] @{target_username} (ID: {target_id}, Session: {target.assigned_session or payload.session_name}) marked as replied. Firing triage...")
 
         # 3. Log inbound reply message
         ok_log, log_res = await MessageService.log_message(

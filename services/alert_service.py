@@ -114,7 +114,7 @@ class AlertService:
         payload = {
             "chat_id": target_group,
             "text": text,
-            "parse_mode": "Markdown"
+            "parse_mode": "HTML"
         }
 
         try:

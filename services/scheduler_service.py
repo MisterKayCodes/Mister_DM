@@ -130,11 +130,12 @@ class SchedulerService:
                             logger.info(f"[SCHEDULER] Persona {persona_name} is sleeping (TZ: {timezone_str}, Window: {active_hours_str}).")
                             try:
                                 from services.alert_service import AlertService
+                                from utils.telegram_utils import safe_html
                                 asyncio.create_task(AlertService.send_admin_alert(
-                                    f"💤 *{persona_name} is currently sleeping*\n"
-                                    f"Timezone: `{timezone_str}`\n"
-                                    f"Active Hours: `{active_hours_str}`\n"
-                                    f"Campaign `{campaign.get('name')}` is paused until morning."
+                                    f"💤 <b>{safe_html(persona_name)} is currently sleeping</b>\n"
+                                    f"Timezone: <code>{safe_html(timezone_str)}</code>\n"
+                                    f"Active Hours: <code>{safe_html(active_hours_str)}</code>\n"
+                                    f"Campaign <b>{safe_html(str(campaign.get('name')))}</b> is paused until morning."
                                 ))
                             except Exception as alert_exc:
                                 logger.error(f"[SCHEDULER] Failed to send sleep alert: {alert_exc}")

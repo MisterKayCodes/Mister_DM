@@ -277,7 +277,10 @@ class RelationshipService:
                     message_text=reply_text,
                     telegram_user_id=target.telegram_user_id
                 )
-                send_success = res.get("status") == "success" or res.get("ok", False) if isinstance(send_result, dict) else True
+                if isinstance(send_result, dict):
+                    send_success = send_result.get("status") == "success" or send_result.get("ok", False)
+                else:
+                    send_success = True
                 logger.info(f"[RELATIONSHIP_SERVICE] Simulator DM sent result: {send_result}")
             except Exception as send_exc:
                 logger.error(f"[RELATIONSHIP_SERVICE] Failed to send Simulator DM to @{target.username}: {send_exc}")

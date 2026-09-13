@@ -45,6 +45,7 @@ async def main():
 
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
+    dp.include_router(war_room_handler)
     dp.include_router(account_router)
     dp.include_router(campaign_router)
     dp.include_router(template_router)
@@ -54,7 +55,6 @@ async def main():
     dp.include_router(export_handler)
     dp.include_router(stats_handler)
     dp.include_router(blacklist_handler)
-    dp.include_router(war_room_handler)
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

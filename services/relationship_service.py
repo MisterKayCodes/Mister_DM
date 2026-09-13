@@ -85,6 +85,50 @@ class RelationshipService:
                 limit=30
             )
 
+            # Check for non-text media messages (voice notes, photos, stickers, empty text)
+            KNOWN_MEDIA_TAGS = {"[voice note]", "[photo]", "[sticker]", "[video]", "[audio]", "[document]"}
+            clean_msg = (inbound_message or "").strip()
+            is_media = (not clean_msg) or (clean_msg.lower() in KNOWN_MEDIA_TAGS)
+
+            if is_media:
+                logger.warning(f"[RELATIONSHIP_SERVICE] Non-text media message received for target ID {target_id}. Pausing for human override.")
+                await target_repo.set_target_needs_human(session, target_id, True)
+                # Save user inbound media notice to chat history
+                await relationship_messages_repo.add_message(
+                    session=session,
+                    chat_id=chat.id,
+                    role="user",
+                    content=inbound_message or "[Non-text Media]"
+                )
+                await session.commit()
+
+                try:
+                    from services.alert_service import AlertService
+                    persona_name = persona.get("name") if isinstance(persona, dict) else (getattr(persona, "name", "Sarah") if persona else "Sarah")
+                    target_dict = {
+                        "id": target.id,
+                        "username": target.username,
+                        "first_name": getattr(target, "first_name", None) or target.note,
+                        "note": target.note
+                    }
+                    asyncio.create_task(
+                        AlertService.send_war_room_alert(
+                            target_id=target.id,
+                            target_data=target_dict,
+                            persona_name=persona_name or "Sarah",
+                            last_message=inbound_message or "[Non-text Media]"
+                        )
+                    )
+                except Exception as alert_exc:
+                    logger.error(f"[RELATIONSHIP_SERVICE] Failed to trigger War Room Alert for media: {alert_exc}")
+
+                return {
+                    "status": "needs_human",
+                    "intent": "Non-text media received (Voice note / Image / Media)",
+                    "confidence_score": 0,
+                    "reply_text": ""
+                }
+
             # 2. Topic classification (cheap call / prompt building)
             selected_lore = ""
             try:
@@ -177,26 +221,7 @@ class RelationshipService:
                 content=inbound_message
             )
 
-            # 7. Save assistant message to DB
-            asst_msg = await relationship_messages_repo.add_message(
-                session=session,
-                chat_id=chat.id,
-                role="assistant",
-                content=reply_text
-            )
-
-            # 8. Log AI intent
-            await intents_repo.log_intent(
-                session=session,
-                message_id=asst_msg.id,
-                intent_text=intent_text,
-                confidence_score=confidence_score,
-                needs_human=needs_human
-            )
-
-            await session.commit()
-
-            # 9. Background: Fire Intel Extraction (non-blocking)
+            # 7. Background: Fire Intel Extraction (non-blocking)
             asyncio.create_task(
                 RelationshipService._extract_and_save_intel(
                     target_id=target_id,
@@ -205,7 +230,7 @@ class RelationshipService:
                 )
             )
 
-            # 10. If human override requested, flag DB, trigger AlertService, and stop execution
+            # 8. If human override requested, flag DB, trigger AlertService, and stop execution BEFORE sending/saving AI reply
             if needs_human:
                 logger.warning(
                     f"[RELATIONSHIP_SERVICE] 🚨 Human override requested for target @{target.username}. "
@@ -242,7 +267,8 @@ class RelationshipService:
                     "reply_text": reply_text
                 }
 
-            # 11. Send reply via Mister Simulator
+            # 9. Send reply via Mister Simulator BEFORE committing assistant message to history
+            send_success = False
             try:
                 logger.info(f"[RELATIONSHIP_SERVICE] Sending response to @{target.username} via Simulator...")
                 send_result = await simulator_client.send_dm(
@@ -251,16 +277,44 @@ class RelationshipService:
                     message_text=reply_text,
                     telegram_user_id=target.telegram_user_id
                 )
+                send_success = res.get("status") == "success" or res.get("ok", False) if isinstance(send_result, dict) else True
                 logger.info(f"[RELATIONSHIP_SERVICE] Simulator DM sent result: {send_result}")
             except Exception as send_exc:
                 logger.error(f"[RELATIONSHIP_SERVICE] Failed to send Simulator DM to @{target.username}: {send_exc}")
+                send_success = False
 
-            return {
-                "status": "sent",
-                "intent": intent_text,
-                "confidence_score": confidence_score,
-                "reply_text": reply_text
-            }
+            if send_success:
+                # 10. Save assistant message and intent ONLY after successful DM delivery
+                asst_msg = await relationship_messages_repo.add_message(
+                    session=session,
+                    chat_id=chat.id,
+                    role="assistant",
+                    content=reply_text
+                )
+                await intents_repo.log_intent(
+                    session=session,
+                    message_id=asst_msg.id,
+                    intent_text=intent_text,
+                    confidence_score=confidence_score,
+                    needs_human=needs_human
+                )
+                await session.commit()
+
+                return {
+                    "status": "sent",
+                    "intent": intent_text,
+                    "confidence_score": confidence_score,
+                    "reply_text": reply_text
+                }
+            else:
+                # DM send failed, commit user message history only
+                await session.commit()
+                return {
+                    "status": "failed",
+                    "intent": intent_text,
+                    "confidence_score": confidence_score,
+                    "reply_text": reply_text
+                }
 
     @staticmethod
     def _parse_ai_response(raw: str) -> dict:
@@ -296,7 +350,13 @@ class RelationshipService:
 
                 msg = str(data.get("message", "")).strip() or raw.strip()
                 intent = str(data.get("intent", "No explicit intent provided.")).strip()
-                needs_human = bool(data.get("needs_human", False))
+                
+                # Robust needs_human parsing across booleans, strings ("true", "false", "yes"), and ints
+                needs_human_raw = data.get("needs_human", False)
+                if isinstance(needs_human_raw, str):
+                    needs_human = needs_human_raw.strip().lower() in ("true", "1", "yes")
+                else:
+                    needs_human = bool(needs_human_raw)
 
                 return {
                     "intent": intent,

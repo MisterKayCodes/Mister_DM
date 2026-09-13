@@ -2,6 +2,7 @@ import random
 import logging
 import httpx
 import config
+from utils.telegram_utils import safe_html
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +61,9 @@ class AlertService:
         # Pick a random template to keep notifications fresh
         template = random.choice(ALERT_TEMPLATES)
         text = template.format(
-            persona_name=persona_name,
-            target_display=target_display,
-            last_message=last_message or "No message content"
+            persona_name=safe_html(persona_name),
+            target_display=safe_html(target_display),
+            last_message=safe_html(last_message or "No message content")
         )
 
         # Deep link URL to jump directly into private DM with bot

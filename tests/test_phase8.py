@@ -22,12 +22,16 @@ async def test_phase8():
     async with AsyncSessionLocal() as session:
         # Test 1: Create or fetch test target
         print("\n[TEST 1] Setting up test campaign and target...")
-        campaign = await campaign_repo.insert_campaign(session, "Phase 8 War Room Campaign")
+        import time
+        campaign = await campaign_repo.get_campaign_by_name(session, "Phase 8 War Room Campaign")
+        if not campaign:
+            campaign = await campaign_repo.insert_campaign(session, f"Phase 8 War Room Campaign {int(time.time())}")
         
+        ts = int(time.time())
         # Add target with username
         target_a = Target(
             campaign_id=campaign.id,
-            username="warroom_lead_a",
+            username=f"warroom_lead_a_{ts}",
             note="John Doe",
             status="sent",
             triage_status="RELATIONAL"
@@ -35,8 +39,8 @@ async def test_phase8():
         # Add target without username (test fallback)
         target_b = Target(
             campaign_id=campaign.id,
-            username="",
-            note="Anonymous Lead B",
+            username=f"anon_b_{ts}",
+            note=f"Anonymous Lead B {ts}",
             status="sent",
             triage_status="RELATIONAL"
         )
@@ -66,7 +70,7 @@ async def test_phase8():
         disp_b = AlertService.format_target_display({"id": target_b.id, "username": "", "first_name": "Anonymous Lead B"})
         disp_c = AlertService.format_target_display({"id": 999, "username": "", "first_name": ""})
 
-        assert disp_a == "@warroom_lead_a", f"Expected @warroom_lead_a, got {disp_a}"
+        assert disp_a == f"@{target_a.username}", f"Expected @{target_a.username}, got {disp_a}"
         assert "Anonymous Lead B" in disp_b, f"Expected Anonymous Lead B, got {disp_b}"
         assert disp_c == "Target #999", f"Expected Target #999, got {disp_c}"
         print(f"[PASS] Name formatting fallbacks: '{disp_a}', '{disp_b}', '{disp_c}'")

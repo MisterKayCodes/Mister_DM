@@ -8,8 +8,9 @@ from aiogram.fsm.context import FSMContext
 from bot.states.war_room_states import WarRoomStates
 from bot.keyboards.account_keyboards import main_menu_keyboard
 from data.database import AsyncSessionLocal
-from data.repositories import target_repo, relationship_messages_repo, persona_repo, campaign_repo
+from data.repositories import target_repo, relationship_messages_repo, personas_repo, campaign_repo
 from clients.simulator_client import simulator_client
+from utils.telegram_utils import safe_html
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -22,7 +23,7 @@ def war_room_dashboard_keyboard(targets_needing_human: list) -> InlineKeyboardMa
         display = f"@{t.username}" if t.username else f"Target #{t.id}"
         buttons.append([
             InlineKeyboardButton(
-                text=f"🚨 Override {display}",
+                text=f"🚨 Override {safe_html(display)}",
                 callback_data=f"wr_select_{t.id}"
             )
         ])
@@ -127,7 +128,7 @@ async def handle_target_select_callback(callback: CallbackQuery, state: FSMConte
 async def _render_target_override_view(message_or_cb, target_id: int):
     """Helper to render target details and recent conversation history."""
     async with AsyncSessionLocal() as session:
-        target = await target_repo.get_target_id(session, target_id) if hasattr(target_repo, 'get_target_id') else await target_repo.get_target_by_id(session, target_id)
+        target = await target_repo.get_target_by_id(session, target_id)
         if not target:
             text = "❌ Target not found in database."
             if isinstance(message_or_cb, CallbackQuery):
@@ -141,13 +142,13 @@ async def _render_target_override_view(message_or_cb, target_id: int):
         chat = await relationship_chats_repo.get_chat_by_target(session, target_id)
         recent_history = []
         if chat:
-            msgs = await relationship_messages_repo.get_chat_history(session, chat.id, limit=5)
+            msgs = await relationship_messages_repo.get_recent_messages(session, chat.id, limit=5)
             recent_history = msgs
 
         # Get persona name
         persona_name = "Sarah"
         if target.assigned_persona_id:
-            persona = await persona_repo.get_persona_by_id(session, target.assigned_persona_id)
+            persona = await personas_repo.get_persona(session, target.assigned_persona_id)
             if persona:
                 persona_name = persona.name
 
@@ -156,15 +157,15 @@ async def _render_target_override_view(message_or_cb, target_id: int):
     script_text = "📜 <b>Recent Conversation History:</b>\n"
     if recent_history:
         for m in recent_history:
-            sender = "👤 Lead" if m.role == "user" else f"🤖 {persona_name}"
-            script_text += f"• <b>{sender}:</b> {m.content}\n"
+            sender = "👤 Lead" if m.role == "user" else f"🤖 {safe_html(persona_name)}"
+            script_text += f"• <b>{sender}:</b> {safe_html(m.content)}\n"
     else:
         script_text += "<i>No prior message history recorded yet.</i>\n"
 
     body = (
-        f"🚨 <b>WAR ROOM OVERRIDE FOR {display_name}</b>\n"
+        f"🚨 <b>WAR ROOM OVERRIDE FOR {safe_html(display_name)}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"<b>Persona:</b> {persona_name}\n"
+        f"<b>Persona:</b> {safe_html(persona_name)}\n"
         f"<b>Status:</b> Needs Human Intervention\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"{script_text}\n"
@@ -198,6 +199,16 @@ async def start_manual_reply_fsm(callback: CallbackQuery, state: FSMContext):
         ])
     )
     await callback.answer()
+
+
+@router.message(WarRoomStates.waiting_for_override_text, ~F.text)
+async def process_manual_reply_non_text(message: Message):
+    """Guards against stickers, photos, voice notes sent by admin during override."""
+    await message.answer(
+        "⚠️ <b>Plain text required.</b>\n"
+        "Mister DM can only proxy-send text messages right now. Please type your reply as plain text:",
+        parse_mode="HTML"
+    )
 
 
 @router.message(WarRoomStates.waiting_for_override_text)

@@ -13,12 +13,9 @@ from clients.exceptions import APIUnavailableError, APIResponseError
 from data.database import AsyncSessionLocal
 from data.repositories import account_repo
 
-logger = logging.getLogger(__name__)
+from config import DRY_RUN, DEV_DELAY_MIN, DEV_DELAY_MAX
 
-# Toggle for safety during dev
-DRY_RUN = False
-DEV_DELAY_MIN = 10
-DEV_DELAY_MAX = 20
+logger = logging.getLogger(__name__)
 
 class SchedulerService:
     """
@@ -149,9 +146,9 @@ class SchedulerService:
                 template_id = template["id"]
                 
                 # Phase 9: Dynamic Personalized Opener for ACTIVE Leads
-                lead_type = target.get("lead_type", "LURKER") if isinstance(target, dict) else getattr(target, "lead_type", "LURKER")
-                profile_notes = target.get("profile_notes") if isinstance(target, dict) else getattr(target, "profile_notes", None)
-                contact_name = (target.get("username") if isinstance(target, dict) else getattr(target, "username", None)) or "friend"
+                lead_type = target.get("lead_type", "LURKER")
+                profile_notes = target.get("profile_notes")
+                contact_name = target.get("username", "friend")
 
                 if (lead_type == "ACTIVE") and profile_notes:
                     try:
@@ -159,7 +156,7 @@ class SchedulerService:
                         from core.prompt_builder import build_personalized_opener_prompt
                         
                         persona_name = "Sarah"
-                        persona_id = target.get("assigned_persona_id") if isinstance(target, dict) else getattr(target, "assigned_persona_id", None)
+                        persona_id = target.get("assigned_persona_id")
                         if persona_id:
                             async with AsyncSessionLocal() as s:
                                 from data.repositories import personas_repo
@@ -187,6 +184,7 @@ class SchedulerService:
                 
                 success = False
                 resolved_user_id = None
+                resolved_message_id = None
                 
                 # Delegation Path A: Mister Simulator API
                 target_session = session_name or campaign.get("session_name")
@@ -199,6 +197,7 @@ class SchedulerService:
                         )
                         success = res.get("status") == "success" or res.get("ok", False)
                         resolved_user_id = res.get("telegram_user_id") or res.get("user_id")
+                        resolved_message_id = res.get("message_id")
                     except APIUnavailableError as e:
                         logger.error(f"[SCHEDULER] Simulator API unavailable: {e}. Pausing campaign {campaign_id}.")
                         await CampaignService.update_campaign_status(campaign_id, "paused")
@@ -214,6 +213,7 @@ class SchedulerService:
                         message_text=message_text,
                         dry_run=DRY_RUN
                     )
+                    resolved_message_id = None
 
                 new_status = "sent" if success else "failed"
                 await TargetService.update_target_status(
@@ -233,7 +233,7 @@ class SchedulerService:
                         message_type="TEXT",
                         account_id=acc_id,
                         text=message_text,
-                        telegram_message_id=resolved_user_id,
+                        telegram_message_id=resolved_message_id,
                         template_id=template_id
                     )
                     if not ok_log:

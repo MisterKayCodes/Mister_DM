@@ -16,7 +16,12 @@ def campaign_to_dto(campaign: Campaign) -> dict:
 
 def target_to_dto(target: Target) -> dict:
     """
-    Single source of truth for the Target DTO shape (including Phase 3 Lead Intelligence fields).
+    DTO for the campaign/scheduler layer — includes all fields the outreach engine and
+    Phase 9 profiler need at runtime (lead_type, profile_notes, persona, goal, etc.).
+
+    Intentionally excludes `mirror_profile_json`: it's a potentially large JSON blob
+    read directly off the ORM object by intelligence_service.py and relationship_service.py
+    which do their own DB fetches. Adding it here would bloat every DTO unnecessarily.
     """
     return {
         "id": target.id,
@@ -35,4 +40,11 @@ def target_to_dto(target: Target) -> dict:
         "handoff_status": getattr(target, "handoff_status", None),
         "handoff_attempts": getattr(target, "handoff_attempts", 0),
         "handoff_last_attempt": target.handoff_last_attempt.isoformat() if getattr(target, "handoff_last_attempt", None) else None,
+        "trust_score": getattr(target, "trust_score", 0),
+        "timezone": getattr(target, "timezone", "Unknown"),
+        "goal": getattr(target, "goal", None),
+        "mirror_confidence": getattr(target, "mirror_confidence", 0),
+        "assigned_persona_id": getattr(target, "assigned_persona_id", None),
+        "needs_human": getattr(target, "needs_human", False),
+        "lead_type": getattr(target, "lead_type", "LURKER"),
     }

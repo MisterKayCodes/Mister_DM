@@ -134,12 +134,8 @@ class TargetService:
             target = await target_repo.get_next_pending_target(sess, campaign_id)
             if not target:
                 return None
-            return {
-                "id": target.id,
-                "campaign_id": target.campaign_id,
-                "username": target.username,
-                "status": target.status
-            }
+            from utils.dto_builders import target_to_dto
+            return target_to_dto(target)
             
         if session is None:
             async with AsyncSessionLocal() as new_sess:

@@ -9,7 +9,8 @@ def manage_campaign_keyboard(status: str = "draft") -> ReplyKeyboardMarkup:
         ],
         [
             KeyboardButton(text="👥 Add Targets"),
-            KeyboardButton(text="👀 View Targets")
+            KeyboardButton(text="👀 View Targets"),
+            KeyboardButton(text="📥 Ingest Profiles")
         ],
     ]
     

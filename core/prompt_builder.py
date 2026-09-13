@@ -121,6 +121,36 @@ def build_intel_extraction_prompt(contact_name: str) -> str:
     )
 
 
+def build_personalized_opener_prompt(
+    persona_name: str,
+    contact_name: str,
+    profile_notes: str,
+    template_examples: list[str]
+) -> str:
+    """
+    Constructs the system prompt for Groq to craft a hyper-personalized
+    outreach opening DM for an ACTIVE lead based on their DeepSeek profile notes.
+    """
+    examples_str = ""
+    if template_examples:
+        examples_str = "\n".join([f'- "{t}"' for t in template_examples[:3]])
+    else:
+        examples_str = '- "Hey, saw your post in the group earlier. Quick question for you."'
+
+    return (
+        f"You are {persona_name}. You are sending a first private direct message (DM) on Telegram to {contact_name}.\n\n"
+        f"### PSYCHOLOGICAL PROFILE ON {contact_name.upper()} ###\n"
+        f"{profile_notes}\n\n"
+        "### EXAMPLE CAMPAIGN OPENERS (Style & Tone Guide) ###\n"
+        f"{examples_str}\n\n"
+        "### INSTRUCTIONS ###\n"
+        "1. Write a short, highly compelling, natural initial DM to start a private conversation.\n"
+        "2. Subtly tailor the opener to match their psychological profile, pain points, or communication style.\n"
+        "3. Keep it under 25 words. Sound casual, non-spammy, and real like a normal Telegram user.\n"
+        "4. Output ONLY the raw text message to send. No quotes, no explanations, no JSON wrappers."
+    )
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Private section builders (pure helpers)
 # ──────────────────────────────────────────────────────────────────────────────

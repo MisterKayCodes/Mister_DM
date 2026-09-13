@@ -273,3 +273,46 @@ async def get_targets_needing_human(session: AsyncSession) -> list[Target]:
     return list(result.scalars().all())
 
 
+async def ingest_deepseek_profiles(session: AsyncSession, campaign_id: int, profiles: list[dict]) -> tuple[int, int]:
+    """
+    Bulk ingests DeepSeek psychological profiles into campaign targets.
+    Updates lead_type, profile_notes, goal, and timezone for matched usernames.
+    Returns (active_count, lurker_count).
+    """
+    active_count = 0
+    lurker_count = 0
+
+    for item in profiles:
+        if not isinstance(item, dict):
+            continue
+        raw_username = item.get("username", "")
+        if not raw_username:
+            continue
+        clean_user = raw_username.lstrip("@").strip()
+        lead_type = (item.get("lead_type") or "ACTIVE").upper()
+
+        stmt = select(Target).where(
+            Target.campaign_id == campaign_id,
+            Target.username == clean_user
+        ).limit(1)
+        res = await session.execute(stmt)
+        target = res.scalar_one_or_none()
+
+        if target:
+            target.lead_type = lead_type
+            if item.get("profile_notes"):
+                target.profile_notes = str(item.get("profile_notes")).strip()
+                target.profile_confidence = 5
+            if item.get("goal"):
+                target.goal = str(item.get("goal")).strip()
+            if item.get("timezone"):
+                target.timezone = str(item.get("timezone")).strip()
+
+            if lead_type == "ACTIVE":
+                active_count += 1
+            else:
+                lurker_count += 1
+
+    return active_count, lurker_count
+
+

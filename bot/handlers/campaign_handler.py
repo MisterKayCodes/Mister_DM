@@ -331,3 +331,89 @@ async def confirm_campaign_delete_handler(message: Message):
         )
     else:
         await message.answer(CAMP_DELETE_FAIL.format(msg=msg), reply_markup=campaigns_menu_keyboard())
+
+
+# ==========================================
+# DEEPSEEK PROFILE INGESTION (Phase 9)
+# ==========================================
+
+@router.message(F.text == "📥 Ingest Profiles", StateFilter("*"))
+async def ingest_profiles_start(message: Message, state: FSMContext):
+    data = await state.get_data()
+    campaign_id = data.get("current_campaign_id")
+    campaign_name = data.get("current_campaign_name", "Campaign")
+
+    if not campaign_id:
+        await message.answer("❌ Please select a campaign first by tapping its name in 📋 List Campaigns.")
+        return
+
+    await state.set_state(AddCampaignStates.waiting_for_deepseek_json)
+    await message.answer(
+        f"📥 <b>DEEPSEEK PROFILE INGESTION FOR {safe_html(campaign_name)}</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "Paste your DeepSeek JSON array below. Must follow the schema:\n\n"
+        "<pre>[\n"
+        "  {\n"
+        '    "username": "john_doe",\n'
+        '    "lead_type": "ACTIVE",\n'
+        '    "profile_notes": "Psychological summary...",\n'
+        '    "goal": "JOIN_GROUP",\n'
+        '    "timezone": "Africa/Lagos"\n'
+        "  }\n"
+        "]</pre>\n\n"
+        "<i>Mister DM will map profiles to targets and set up personalized openers!</i>",
+        parse_mode="HTML"
+    )
+
+
+@router.message(AddCampaignStates.waiting_for_deepseek_json)
+async def process_deepseek_json(message: Message, state: FSMContext):
+    import json
+    data = await state.get_data()
+    campaign_id = data.get("current_campaign_id")
+    raw_text = (message.text or "").strip()
+
+    if not campaign_id:
+        await state.clear()
+        await message.answer("❌ Campaign selection lost. Please re-select campaign.")
+        return
+
+    # Clean markdown backticks if user pasted ```json ... ```
+    if "```" in raw_text:
+        lines = [l for l in raw_text.splitlines() if not l.strip().startswith("```")]
+        raw_text = "\n".join(lines).strip()
+
+    try:
+        profiles = json.loads(raw_text)
+        if not isinstance(profiles, list):
+            await message.answer("❌ Invalid JSON schema: Expected a top-level JSON array `[...]`. Please check format and try again:")
+            return
+    except Exception as exc:
+        await message.answer(f"❌ Failed to parse JSON ({exc}). Please check formatting and paste again:")
+        return
+
+    await state.clear()
+
+    # Bulk ingest profiles via target_repo
+    from data.database import AsyncSessionLocal
+    from data.repositories import target_repo
+
+    async with AsyncSessionLocal() as session:
+        active_cnt, lurker_cnt = await target_repo.ingest_deepseek_profiles(session, campaign_id, profiles)
+        await session.commit()
+
+    total_matched = active_cnt + lurker_cnt
+    summary = await CampaignService.get_campaign_summary(campaign_id)
+
+    await message.answer(
+        f"✅ <b>PROFILES INGESTED SUCCESSFULLY!</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🟢 <b>ACTIVE Leads Profiled:</b> {active_cnt}\n"
+        f"⚪ <b>LURKER Leads Updated:</b> {lurker_cnt}\n"
+        f"📊 <b>Total Targets Ingested:</b> {total_matched}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"ACTIVE leads will receive Groq personalized DMs.\n"
+        f"LURKER leads will receive generic curiosity openers.",
+        parse_mode="HTML",
+        reply_markup=manage_campaign_keyboard(summary["status"] if summary else "draft")
+    )

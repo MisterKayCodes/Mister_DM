@@ -38,6 +38,9 @@ class Target(Base):
     # Phase 8: War Room & Human Override
     needs_human = Column(Boolean, default=False, nullable=False)
 
+    # Phase 9: Profiler Pipeline
+    lead_type = Column(String, default="LURKER", nullable=False)
+
     campaign = relationship("Campaign", back_populates="targets")
     pain_tags = relationship("PainTag", secondary="target_pain_tags", back_populates="targets")
     persona = relationship("Persona", back_populates="targets")

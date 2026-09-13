@@ -143,11 +143,47 @@ class SchedulerService:
                     await CampaignService.update_campaign_status(campaign_id, "paused")
                     break
                     
+                template_contents = [t["content"] for t in templates]
                 template = random.choice(templates)
                 message_text = template["content"]
                 template_id = template["id"]
                 
-                logger.info(f"[SCHEDULER] Processing target @{target['username']} with Template #{template_id}...")
+                # Phase 9: Dynamic Personalized Opener for ACTIVE Leads
+                lead_type = target.get("lead_type", "LURKER") if isinstance(target, dict) else getattr(target, "lead_type", "LURKER")
+                profile_notes = target.get("profile_notes") if isinstance(target, dict) else getattr(target, "profile_notes", None)
+                contact_name = (target.get("username") if isinstance(target, dict) else getattr(target, "username", None)) or "friend"
+
+                if (lead_type == "ACTIVE") and profile_notes:
+                    try:
+                        from providers.groq_client import groq_client
+                        from core.prompt_builder import build_personalized_opener_prompt
+                        
+                        persona_name = "Sarah"
+                        persona_id = target.get("assigned_persona_id") if isinstance(target, dict) else getattr(target, "assigned_persona_id", None)
+                        if persona_id:
+                            async with AsyncSessionLocal() as s:
+                                from data.repositories import personas_repo
+                                p_obj = await personas_repo.get_persona(s, persona_id)
+                                if p_obj:
+                                    persona_name = p_obj.name
+
+                        opener_sys_prompt = build_personalized_opener_prompt(
+                            persona_name=persona_name,
+                            contact_name=contact_name,
+                            profile_notes=profile_notes,
+                            template_examples=template_contents
+                        )
+                        custom_opener = await groq_client.chat_complete(
+                            system_prompt=opener_sys_prompt,
+                            user_prompt=f"Craft personalized initial DM for {contact_name}."
+                        )
+                        if custom_opener and custom_opener.strip():
+                            message_text = custom_opener.strip().strip('"')
+                            logger.info(f"[SCHEDULER] Generated personalized Groq opener for ACTIVE lead @{contact_name}")
+                    except Exception as opener_exc:
+                        logger.warning(f"[SCHEDULER] Failed to generate personalized opener ({opener_exc}). Falling back to template #{template_id}")
+
+                logger.info(f"[SCHEDULER] Processing target @{contact_name} (Type: {lead_type}) with Template #{template_id}...")
                 
                 success = False
                 resolved_user_id = None

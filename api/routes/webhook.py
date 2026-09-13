@@ -38,7 +38,7 @@ async def receive_reply(payload: ReplyWebhookPayload):
             stmt = (
                 select(Target)
                 .where(Target.telegram_user_id == payload.from_user_id)
-                .where(Target.status == "sent")
+                .where(Target.status.in_(["sent", "replied"]))
                 .limit(1)
             )
             result = await session.execute(stmt)
@@ -48,7 +48,7 @@ async def receive_reply(payload: ReplyWebhookPayload):
             stmt = (
                 select(Target)
                 .where(Target.username == clean_username)
-                .where(Target.status == "sent")
+                .where(Target.status.in_(["sent", "replied"]))
                 .limit(1)
             )
             result = await session.execute(stmt)
@@ -60,7 +60,8 @@ async def receive_reply(payload: ReplyWebhookPayload):
 
         # 2. Update status to replied and verify/lock assigned_session
         target.status = "replied"
-        target.replied_at = func.now()
+        if not target.replied_at:
+            target.replied_at = func.now()
         if payload.from_user_id:
             target.telegram_user_id = payload.from_user_id
             

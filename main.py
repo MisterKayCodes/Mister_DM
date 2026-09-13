@@ -12,6 +12,7 @@ from bot.handlers.pain_point_handler import router as pain_point_handler
 from bot.handlers.export_handler import router as export_handler
 from bot.handlers.stats_handler import router as stats_handler
 from bot.handlers.blacklist_handler import router as blacklist_handler
+from bot.handlers.war_room_handler import router as war_room_handler
 from services.campaign_service import CampaignService
 from services.account_service import AccountService
 from services.scheduler_service import SchedulerService
@@ -53,6 +54,7 @@ async def main():
     dp.include_router(export_handler)
     dp.include_router(stats_handler)
     dp.include_router(blacklist_handler)
+    dp.include_router(war_room_handler)
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

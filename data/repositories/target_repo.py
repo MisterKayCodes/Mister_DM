@@ -258,3 +258,18 @@ async def update_target_relational_data(
     result = await session.execute(stmt)
     return result.rowcount
 
+
+async def set_target_needs_human(session: AsyncSession, target_id: int, needs_human: bool = True) -> int:
+    """Updates the needs_human flag on a target."""
+    stmt = update(Target).where(Target.id == target_id).values(needs_human=needs_human)
+    result = await session.execute(stmt)
+    return result.rowcount
+
+
+async def get_targets_needing_human(session: AsyncSession) -> list[Target]:
+    """Fetches all targets that currently have needs_human = True."""
+    stmt = select(Target).where(Target.needs_human == True).order_by(Target.id.desc())
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+

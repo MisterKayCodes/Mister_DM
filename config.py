@@ -9,6 +9,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///data/mister_dm.db"
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is not set in the environment variables.")
 
+WAR_ROOM_GROUP_ID = os.getenv("WAR_ROOM_GROUP_ID")  # Optional Telegram Group ID or Admin User ID for War Room notifications
+BOT_USERNAME = os.getenv("BOT_USERNAME", "MisterDMBot")  # Used for deep-link button URLs
+
 # Scheduler settings — flip DRY_RUN to False and set real delays for production
 DRY_RUN = True
 DEV_DELAY_MIN = 1

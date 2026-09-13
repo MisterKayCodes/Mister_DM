@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, ForeignKey, UniqueConstraint, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from . import Base
@@ -34,6 +34,9 @@ class Target(Base):
     mirror_profile_json = Column(Text, nullable=True)
     mirror_confidence = Column(Integer, default=0, nullable=False)
     assigned_persona_id = Column(Integer, ForeignKey("personas.id"), nullable=True)
+
+    # Phase 8: War Room & Human Override
+    needs_human = Column(Boolean, default=False, nullable=False)
 
     campaign = relationship("Campaign", back_populates="targets")
     pain_tags = relationship("PainTag", secondary="target_pain_tags", back_populates="targets")

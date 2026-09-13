@@ -205,12 +205,36 @@ class RelationshipService:
                 )
             )
 
-            # 10. If human override requested, log and stop execution
+            # 10. If human override requested, flag DB, trigger AlertService, and stop execution
             if needs_human:
                 logger.warning(
                     f"[RELATIONSHIP_SERVICE] 🚨 Human override requested for target @{target.username}. "
                     f"Confidence: {confidence_score}. Intent: {intent_text}"
                 )
+                await target_repo.set_target_needs_human(session, target_id, True)
+                await session.commit()
+
+                # Dispatch War Room Alert to Telegram Group asynchronously
+                try:
+                    from services.alert_service import AlertService
+                    persona_name = persona.get("name") if isinstance(persona, dict) else (getattr(persona, "name", "Sarah") if persona else "Sarah")
+                    target_dict = {
+                        "id": target.id,
+                        "username": target.username,
+                        "first_name": getattr(target, "first_name", None) or target.note,
+                        "note": target.note
+                    }
+                    asyncio.create_task(
+                        AlertService.send_war_room_alert(
+                            target_id=target.id,
+                            target_data=target_dict,
+                            persona_name=persona_name or "Sarah",
+                            last_message=inbound_message
+                        )
+                    )
+                except Exception as alert_exc:
+                    logger.error(f"[RELATIONSHIP_SERVICE] Failed to trigger War Room Alert: {alert_exc}")
+
                 return {
                     "status": "needs_human",
                     "intent": intent_text,

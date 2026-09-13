@@ -34,6 +34,7 @@ class RelationshipService:
     ) -> dict | None:
         """
         Executes the full 11-step relational response cycle for an inbound target reply.
+        Note: For Phase 10 MVP, live conversations deliberately bypass persona sleep hours.
         """
         async with AsyncSessionLocal() as session:
             # 1. Load target context

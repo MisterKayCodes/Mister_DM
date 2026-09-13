@@ -27,6 +27,9 @@ class SchedulerService:
     
     # Task registry
     active_campaigns: dict[int, asyncio.Task] = {}
+    
+    # Track which persona IDs are currently asleep to prevent alert spam
+    asleep_personas: set[int] = set()
 
     @staticmethod
     async def start_campaign(campaign_id: int) -> tuple[bool, str, str]:
@@ -96,6 +99,61 @@ class SchedulerService:
                     logger.info(f"[SCHEDULER] Campaign {campaign_id} no longer running. Exiting loop.")
                     break
                     
+                # -------------------------------------------------------------
+                # Phase 10: Persona Sleep / Active Hours Check (Before pulling target)
+                # -------------------------------------------------------------
+                from data.database import AsyncSessionLocal
+                from data.repositories import personas_repo
+                from utils.time_utils import is_persona_active
+                
+                async with AsyncSessionLocal() as sess:
+                    from data.repositories import target_repo
+                    # We just need to check the campaign's linked persona, but we don't have campaign.persona_id.
+                    # Wait, campaign does not have persona_id! Targets have assigned_persona_id.
+                    # For MVP, we can pick the first pending target to see its assigned_persona_id, 
+                    # OR we can just use campaign's generic persona association if it exists.
+                    # Let's pull the persona via the first target. 
+                    # Actually, if we pull the target here, we violate the "check before pull" rule slightly 
+                    # if we just want to look up the persona. BUT we can peek without marking it processing.
+                    target_peek = await target_repo.get_next_pending_target(sess, campaign_id)
+                    
+                    if not target_peek:
+                        logger.info(f"[SCHEDULER] Campaign {campaign_id} completed (no pending targets left).")
+                        await CampaignService.update_campaign_status(campaign_id, "completed")
+                        break
+                        
+                    persona_id = getattr(target_peek, "assigned_persona_id", None) or 1
+                    persona_obj = await personas_repo.get_persona(sess, persona_id)
+                    
+                if persona_obj:
+                    timezone_str = getattr(persona_obj, "timezone", "UTC")
+                    active_hours_str = getattr(persona_obj, "active_hours", "08-22")
+                    persona_name = getattr(persona_obj, "name", "Sarah")
+                    
+                    if not is_persona_active(timezone_str, active_hours_str):
+                        if persona_id not in SchedulerService.asleep_personas:
+                            SchedulerService.asleep_personas.add(persona_id)
+                            logger.info(f"[SCHEDULER] Persona {persona_name} is sleeping (TZ: {timezone_str}, Window: {active_hours_str}).")
+                            try:
+                                from services.alert_service import AlertService
+                                asyncio.create_task(AlertService.send_admin_alert(
+                                    f"💤 *{persona_name} is currently sleeping*\n"
+                                    f"Timezone: `{timezone_str}`\n"
+                                    f"Active Hours: `{active_hours_str}`\n"
+                                    f"Campaign `{campaign.get('name')}` is paused until morning."
+                                ))
+                            except Exception as alert_exc:
+                                logger.error(f"[SCHEDULER] Failed to send sleep alert: {alert_exc}")
+                        
+                        await asyncio.sleep(300) # Sleep for 5 minutes before checking again
+                        continue
+                    else:
+                        # If active and was previously asleep, wake up
+                        if persona_id in SchedulerService.asleep_personas:
+                            SchedulerService.asleep_personas.remove(persona_id)
+
+                # Now we know we are awake, so proceed with the target we peeked.
+                # Just to be safe and use existing abstractions, we use the DTO target.
                 target = await TargetService.get_next_pending_target(campaign_id)
                 if not target:
                     logger.info(f"[SCHEDULER] Campaign {campaign_id} completed.")

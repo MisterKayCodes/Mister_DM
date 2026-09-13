@@ -14,6 +14,11 @@ class Persona(Base):
     traits_json = Column(Text, nullable=True)
     dark_triad_json = Column(Text, nullable=True)
     rules_json = Column(Text, nullable=True)
+    
+    # Phase 10: Sleep Scheduling
+    timezone = Column(String, default="UTC", nullable=False)
+    active_hours = Column(String, default="08-22", nullable=False)
+    
     created_at = Column(DateTime, default=func.now())
 
     targets = relationship("Target", back_populates="persona")

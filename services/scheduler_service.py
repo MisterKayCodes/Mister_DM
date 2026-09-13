@@ -108,13 +108,7 @@ class SchedulerService:
                 
                 async with AsyncSessionLocal() as sess:
                     from data.repositories import target_repo
-                    # We just need to check the campaign's linked persona, but we don't have campaign.persona_id.
-                    # Wait, campaign does not have persona_id! Targets have assigned_persona_id.
-                    # For MVP, we can pick the first pending target to see its assigned_persona_id, 
-                    # OR we can just use campaign's generic persona association if it exists.
-                    # Let's pull the persona via the first target. 
-                    # Actually, if we pull the target here, we violate the "check before pull" rule slightly 
-                    # if we just want to look up the persona. BUT we can peek without marking it processing.
+                    
                     target_peek = await target_repo.get_next_pending_target(sess, campaign_id)
                     
                     if not target_peek:

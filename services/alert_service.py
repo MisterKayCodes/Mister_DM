@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 # Rotating fun / conversational alert templates
 ALERT_TEMPLATES = [
-    "🚨 <b>Boss, {persona_name} needs backup!</b>\nShe is talking to <b>{target_display}</b> and the lead asked a tough question:\n\n<i>\"{last_message}\"</i>\n\nWhat should we tell them?",
+    "🚨 <b>Boss, {persona_name} needs backup!</b>\nCurrently talking to <b>{target_display}</b> and the lead asked a tough question:\n\n<i>\"{last_message}\"</i>\n\nWhat should we tell them?",
     "⚡ <b>War Room Alert!</b>\n{persona_name} hit a road block with <b>{target_display}</b>.\n\n<b>Lead said:</b> <i>\"{last_message}\"</i>\n\nTake over or guide the response!",
     "⚠️ <b>Attention Boss!</b>\n{persona_name} just paused the conversation with <b>{target_display}</b>.\n\n<b>Last Message:</b> <i>\"{last_message}\"</i>\n\nNeed your input on how to handle this.",
     "👀 <b>Oga, {persona_name} don stick for {target_display} o!</b>\n\n<b>Target said:</b> <i>\"{last_message}\"</i>\n\nMake you help out before the lead cold!"
@@ -98,3 +98,36 @@ class AlertService:
         except Exception as e:
             logger.error(f"[ALERT_SERVICE] Failed to send alert: {e}", exc_info=True)
             return False
+
+    @staticmethod
+    async def send_admin_alert(text: str) -> bool:
+        """
+        Dispatches a raw notification text to the configured WAR_ROOM_GROUP_ID.
+        Used for system pings, sleep notifications, and admin alerts.
+        """
+        target_group = config.WAR_ROOM_GROUP_ID
+        if not target_group or not config.BOT_TOKEN:
+            logger.warning("[ALERT_SERVICE] WAR_ROOM_GROUP_ID or BOT_TOKEN not configured. Admin alert skipped.")
+            return False
+
+        url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": target_group,
+            "text": text,
+            "parse_mode": "Markdown"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(url, json=payload)
+                data = response.json()
+                if data.get("ok"):
+                    logger.info(f"[ALERT_SERVICE] Successfully dispatched admin alert to chat {target_group}")
+                    return True
+                else:
+                    logger.error(f"[ALERT_SERVICE] Telegram API error sending admin alert: {data}")
+                    return False
+        except Exception as e:
+            logger.error(f"[ALERT_SERVICE] Failed to send admin alert: {e}", exc_info=True)
+            return False
+

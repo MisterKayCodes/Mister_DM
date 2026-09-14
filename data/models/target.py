@@ -44,6 +44,9 @@ class Target(Base):
     # Phase 10: Session Lock (which DM Warrior account owns this lead)
     assigned_session = Column(String, nullable=True)
 
+    # Phase 11: Story Arc
+    arc_chapter = Column(Integer, default=0, nullable=False)
+
     campaign = relationship("Campaign", back_populates="targets")
     pain_tags = relationship("PainTag", secondary="target_pain_tags", back_populates="targets")
     persona = relationship("Persona", back_populates="targets")

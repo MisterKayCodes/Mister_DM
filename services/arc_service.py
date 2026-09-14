@@ -63,7 +63,17 @@ class ArcService:
             active_arc = await story_arc_repo.get_arc_by_chapter(session, persona_id, current_chapter)
             return active_arc.theme_text if active_arc else None
 
-        # 5. Target advanced! Bumps arc_chapter in DB
+        # 5. Check media requirements: If chapter has media but session_name is missing, defer advance
+        media_items = await story_arc_repo.get_chapter_media(session, earned_arc.id)
+        if media_items and not session_name:
+            logger.warning(
+                f"[ARC_SERVICE] Target @{target.username} qualifies for Chapter {earned_arc.chapter_number}, "
+                f"but session_name is missing. Deferring chapter advance until session is assigned."
+            )
+            active_arc = await story_arc_repo.get_arc_by_chapter(session, persona_id, current_chapter)
+            return active_arc.theme_text if active_arc else None
+
+        # 6. Target advanced! Bumps arc_chapter in DB
         logger.info(
             f"[ARC_SERVICE] Target @{target.username} (ID: {target.id}) advanced "
             f"from Chapter {current_chapter} -> Chapter {earned_arc.chapter_number} "
@@ -71,8 +81,7 @@ class ArcService:
         )
         target.arc_chapter = earned_arc.chapter_number
 
-        # 6. Fire attached chapter media via Simulator (best-effort)
-        media_items = await story_arc_repo.get_chapter_media(session, earned_arc.id)
+        # 7. Fire attached chapter media via Simulator (best-effort)
         if media_items and session_name:
             for item in media_items:
                 try:
@@ -91,5 +100,11 @@ class ArcService:
                     logger.error(
                         f"[ARC_SERVICE] Failed to send media file_id {item.telegram_file_id} to @{target.username}: {media_exc}"
                     )
+
+        # 8. Commit chapter bump immediately so downstream failures cannot roll back an already-sent action
+        try:
+            await session.commit()
+        except Exception as commit_exc:
+            logger.error(f"[ARC_SERVICE] Failed to commit arc_chapter bump for @{target.username}: {commit_exc}")
 
         return earned_arc.theme_text

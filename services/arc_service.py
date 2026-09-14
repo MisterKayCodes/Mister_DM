@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 from typing import Optional
@@ -115,15 +116,42 @@ class ArcService:
             active_arc = await story_arc_repo.get_arc_by_chapter(session, persona_id, current_chapter)
             return active_arc.theme_text if active_arc else None
 
-        # 8. Commit chapter bump immediately so downstream failures cannot roll back an already-sent action
-        try:
-            await session.commit()
-        except Exception as commit_exc:
-            logger.error(f"[ARC_SERVICE] Failed to commit arc_chapter bump for @{target.username}: {commit_exc}")
+        # 8. Bounded DB-commit retry loop for lock/busy operational errors
+        max_attempts = 3
+        delays = [0.1, 0.25]
+        commit_success = False
+
+        for attempt in range(1, max_attempts + 1):
             try:
-                await session.rollback()
-            except Exception as rb_exc:
-                logger.error(f"[ARC_SERVICE] Error rolling back session after commit failure: {rb_exc}")
+                target.arc_chapter = earned_arc.chapter_number
+                await session.commit()
+                commit_success = True
+                break
+            except Exception as commit_exc:
+                err_str = str(commit_exc).lower()
+                is_lock_error = any(msg in err_str for msg in ["database is locked", "database is busy", "lock"])
+                
+                logger.warning(
+                    f"[ARC_SERVICE] Commit attempt {attempt}/{max_attempts} failed for @{target.username}: {commit_exc}"
+                )
+                
+                try:
+                    await session.rollback()
+                except Exception as rb_exc:
+                    logger.error(f"[ARC_SERVICE] Error rolling back session on attempt {attempt}: {rb_exc}")
+
+                if is_lock_error and attempt < max_attempts:
+                    await asyncio.sleep(delays[attempt - 1])
+                else:
+                    # Non-retryable error or final attempt exhausted
+                    break
+
+        if not commit_success:
+            logger.critical(
+                f"[ARC_SERVICE] 🚨 CRITICAL: Failed to commit arc_chapter bump for @{target.username} "
+                f"after {max_attempts} attempts. Telegram media was sent but DB commit failed. "
+                f"Duplicate media may occur on next reply."
+            )
             target.arc_chapter = current_chapter
             active_arc = await story_arc_repo.get_arc_by_chapter(session, persona_id, current_chapter)
             return active_arc.theme_text if active_arc else None

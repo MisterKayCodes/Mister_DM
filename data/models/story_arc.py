@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from . import Base
@@ -15,3 +15,7 @@ class StoryArc(Base):
 
     persona = relationship("Persona", backref="story_arcs")
     media_items = relationship("ArcMedia", back_populates="story_arc", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint('persona_id', 'chapter_number', name='uix_persona_chapter'),
+    )

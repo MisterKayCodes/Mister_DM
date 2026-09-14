@@ -21,8 +21,7 @@ async def create_story_arc(
         theme_text=theme_text
     )
     session.add(arc)
-    await session.commit()
-    await session.refresh(arc)
+    await session.flush()
     return arc
 
 async def get_arcs_for_persona(session: AsyncSession, persona_id: int) -> List[StoryArc]:
@@ -56,8 +55,7 @@ async def add_arc_media(
         media_type=media_type
     )
     session.add(media)
-    await session.commit()
-    await session.refresh(media)
+    await session.flush()
     return media
 
 async def get_chapter_media(session: AsyncSession, arc_id: int) -> List[ArcMedia]:

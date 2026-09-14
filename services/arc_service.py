@@ -81,7 +81,8 @@ class ArcService:
         )
         target.arc_chapter = earned_arc.chapter_number
 
-        # 7. Fire attached chapter media via Simulator (best-effort)
+        # 7. Fire attached chapter media via Simulator (best-effort, track success)
+        all_media_ok = True
         if media_items and session_name:
             for item in media_items:
                 try:
@@ -89,22 +90,42 @@ class ArcService:
                         f"[ARC_SERVICE] Firing chapter media ({item.media_type}) to @{target.username} "
                         f"via session '{session_name}' (file_id: {item.telegram_file_id[:10]}...)"
                     )
-                    await simulator_client.send_media(
+                    res = await simulator_client.send_media(
                         session_name=session_name,
                         target_username=target.username,
                         telegram_file_id=item.telegram_file_id,
                         media_type=item.media_type,
                         telegram_user_id=getattr(target, "telegram_user_id", None)
                     )
+                    if not (isinstance(res, dict) and (res.get("status") == "success" or res.get("ok", False))):
+                        logger.error(f"[ARC_SERVICE] Media send returned non-ok status for @{target.username}: {res}")
+                        all_media_ok = False
                 except Exception as media_exc:
                     logger.error(
                         f"[ARC_SERVICE] Failed to send media file_id {item.telegram_file_id} to @{target.username}: {media_exc}"
                     )
+                    all_media_ok = False
+
+        if not all_media_ok:
+            logger.warning(
+                f"[ARC_SERVICE] One or more media items failed to send for @{target.username}. "
+                f"Reverting chapter advance to Chapter {current_chapter} so delivery can be retried later."
+            )
+            target.arc_chapter = current_chapter
+            active_arc = await story_arc_repo.get_arc_by_chapter(session, persona_id, current_chapter)
+            return active_arc.theme_text if active_arc else None
 
         # 8. Commit chapter bump immediately so downstream failures cannot roll back an already-sent action
         try:
             await session.commit()
         except Exception as commit_exc:
             logger.error(f"[ARC_SERVICE] Failed to commit arc_chapter bump for @{target.username}: {commit_exc}")
+            try:
+                await session.rollback()
+            except Exception as rb_exc:
+                logger.error(f"[ARC_SERVICE] Error rolling back session after commit failure: {rb_exc}")
+            target.arc_chapter = current_chapter
+            active_arc = await story_arc_repo.get_arc_by_chapter(session, persona_id, current_chapter)
+            return active_arc.theme_text if active_arc else None
 
         return earned_arc.theme_text

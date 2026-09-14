@@ -102,6 +102,32 @@ class SimulatorClient(BaseClient):
             "telegram_user_id": telegram_user_id
         }
 
+    async def send_media(
+        self,
+        session_name: str,
+        target_username: str | None,
+        telegram_file_id: str,
+        media_type: str = "photo",
+        telegram_user_id: int | None = None
+    ) -> dict:
+        """
+        Delegates media (photo/video/voice) send execution to Simulator's Telethon engine.
+        Calls POST /api/v1/telethon/send-media
+        """
+        payload = {
+            "session_name": session_name,
+            "target": target_username or str(telegram_user_id),
+            "file_id": telegram_file_id,
+            "media_type": media_type
+        }
+        res = await self._request("POST", "/api/v1/telethon/send-media", json=payload)
+        is_success = res.get("success", False) if isinstance(res, dict) else False
+        return {
+            "status": "success" if is_success else "error",
+            "ok": is_success,
+            "message_id": res.get("message_id") if isinstance(res, dict) else None
+        }
+
     async def push_reply_webhook(
         self,
         session_name: str,

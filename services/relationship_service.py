@@ -162,6 +162,19 @@ class RelationshipService:
             except Exception as exc:
                 logger.warning(f"[RELATIONSHIP_SERVICE] IntelligenceService processing failed: {exc}")
 
+            # Process Story Arc Progression & Media Injection (Phase 11)
+            arc_theme = None
+            try:
+                from services.arc_service import ArcService
+                arc_theme = await ArcService.check_and_advance(
+                    session=session,
+                    target=target,
+                    persona_id=chat.persona_id,
+                    session_name=target.assigned_session or session_name
+                )
+            except Exception as arc_exc:
+                logger.warning(f"[RELATIONSHIP_SERVICE] ArcService progression failed: {arc_exc}")
+
             # 3. Build System Prompt
             system_prompt = build_roleplay_prompt(
                 persona=persona,
@@ -169,7 +182,8 @@ class RelationshipService:
                 intel=intel_list,
                 week=chat.current_week,
                 selected_lore=selected_lore,
-                goal=chat.goal or ""
+                goal=chat.goal or "",
+                arc_theme=arc_theme or ""
             )
 
             # Inject Communication Style Mirroring instructions if profile exists

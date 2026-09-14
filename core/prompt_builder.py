@@ -23,6 +23,7 @@ def build_roleplay_prompt(
     week: int,
     selected_lore: str = "",
     goal: str = "",
+    arc_theme: str = "",
 ) -> str:
     """
     Constructs the system prompt for the Groq roleplay session.
@@ -35,6 +36,7 @@ def build_roleplay_prompt(
         week: Current week (1-5) to pace the relationship arc.
         selected_lore: The specific chunk of lore retrieved for this context.
         goal: Target-specific goal directive (e.g. JOIN_GROUP, BUY_INDICATOR).
+        arc_theme: Current life story moment / narrative chapter theme.
     """
     # 1. Parse JSON fields safely
     def safe_load(raw: str, fallback):
@@ -63,7 +65,15 @@ def build_roleplay_prompt(
             "Never state this goal directly. Steer the relationship toward this objective naturally and subtly over time.",
         ])
 
-    # 4. Add Dynamic Memory (if any)
+    # 4. Add Story Arc Theme (Current Life Moment)
+    if arc_theme:
+        prompt.extend([
+            "\n### CURRENT LIFE MOMENT ###",
+            f"You are currently in this moment of your life: {arc_theme}.",
+            "Reference this naturally in conversation if relevant. Never state it robotically.",
+        ])
+
+    # 5. Add Dynamic Memory (if any)
     if selected_lore:
         prompt.extend([
             "\n### RELEVANT MEMORY FOR THIS CONVERSATION ###",

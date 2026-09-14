@@ -48,4 +48,5 @@ def target_to_dto(target: Target) -> dict:
         "needs_human": getattr(target, "needs_human", False),
         "lead_type": getattr(target, "lead_type", "LURKER"),
         "assigned_session": getattr(target, "assigned_session", None),
+        "arc_chapter": getattr(target, "arc_chapter", 0),
     }

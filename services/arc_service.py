@@ -1,4 +1,3 @@
-import asyncio
 import datetime
 import logging
 from typing import Optional
@@ -74,15 +73,7 @@ class ArcService:
             active_arc = await story_arc_repo.get_arc_by_chapter(session, persona_id, current_chapter)
             return active_arc.theme_text if active_arc else None
 
-        # 6. Target advanced! Bumps arc_chapter in DB
-        logger.info(
-            f"[ARC_SERVICE] Target @{target.username} (ID: {target.id}) advanced "
-            f"from Chapter {current_chapter} -> Chapter {earned_arc.chapter_number} "
-            f"(Days active: {days_elapsed})"
-        )
-        target.arc_chapter = earned_arc.chapter_number
-
-        # 7. Fire attached chapter media via Simulator (best-effort, track success)
+        # 6. Fire attached chapter media via Simulator (best-effort, track success)
         all_media_ok = True
         if media_items and session_name:
             for item in media_items:
@@ -110,50 +101,17 @@ class ArcService:
         if not all_media_ok:
             logger.warning(
                 f"[ARC_SERVICE] One or more media items failed to send for @{target.username}. "
-                f"Reverting chapter advance to Chapter {current_chapter} so delivery can be retried later."
+                f"Chapter advance deferred so media delivery can be retried later."
             )
-            target.arc_chapter = current_chapter
             active_arc = await story_arc_repo.get_arc_by_chapter(session, persona_id, current_chapter)
             return active_arc.theme_text if active_arc else None
 
-        # 8. Bounded DB-commit retry loop for lock/busy operational errors
-        max_attempts = 3
-        delays = [0.1, 0.25]
-        commit_success = False
-
-        for attempt in range(1, max_attempts + 1):
-            try:
-                target.arc_chapter = earned_arc.chapter_number
-                await session.commit()
-                commit_success = True
-                break
-            except Exception as commit_exc:
-                err_str = str(commit_exc).lower()
-                is_lock_error = any(msg in err_str for msg in ["database is locked", "database is busy", "lock"])
-                
-                logger.warning(
-                    f"[ARC_SERVICE] Commit attempt {attempt}/{max_attempts} failed for @{target.username}: {commit_exc}"
-                )
-                
-                try:
-                    await session.rollback()
-                except Exception as rb_exc:
-                    logger.error(f"[ARC_SERVICE] Error rolling back session on attempt {attempt}: {rb_exc}")
-
-                if is_lock_error and attempt < max_attempts:
-                    await asyncio.sleep(delays[attempt - 1])
-                else:
-                    # Non-retryable error or final attempt exhausted
-                    break
-
-        if not commit_success:
-            logger.critical(
-                f"[ARC_SERVICE] 🚨 CRITICAL: Failed to commit arc_chapter bump for @{target.username} "
-                f"after {max_attempts} attempts. Telegram media was sent but DB commit failed. "
-                f"Duplicate media may occur on next reply."
-            )
-            target.arc_chapter = current_chapter
-            active_arc = await story_arc_repo.get_arc_by_chapter(session, persona_id, current_chapter)
-            return active_arc.theme_text if active_arc else None
-
+        # 7. Media delivery succeeded (or chapter has no media): Advance target.arc_chapter IN-MEMORY.
+        # RelationshipService owns the session and will commit this atomically at the end of the reply cycle.
+        logger.info(
+            f"[ARC_SERVICE] Target @{target.username} (ID: {target.id}) advanced "
+            f"from Chapter {current_chapter} -> Chapter {earned_arc.chapter_number} "
+            f"(Days active: {days_elapsed})"
+        )
+        target.arc_chapter = earned_arc.chapter_number
         return earned_arc.theme_text

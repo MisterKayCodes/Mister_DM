@@ -5,7 +5,6 @@ from data.database import AsyncSessionLocal
 from data.repositories import target_repo
 from data.models.target import Target
 from utils.dto_builders import target_to_dto
-from services.handoff_service import HandoffService
 from services.intake_service import IntakeService
 from sqlalchemy import select
 
@@ -101,31 +100,3 @@ async def override_triage(lead_id: int, payload: TriageOverrideRequest):
         await target_repo.update_triage(session, lead_id, payload.triage_status)
         await session.commit()
         return {"status": "success", "message": f"Triage status updated to {payload.triage_status}"}
-
-@router.post("/leads/{lead_id}/handoff/approve")
-async def approve_handoff(lead_id: int):
-    async with AsyncSessionLocal() as session:
-        target = await target_repo.get_target_by_id(session, lead_id)
-        if not target:
-            raise HTTPException(status_code=404, detail="Lead not found")
-        
-    success, msg = await HandoffService.execute_handoff(lead_id)
-    if not success:
-        raise HTTPException(status_code=502, detail=f"Handoff failed: {msg}")
-    return {"status": "success", "message": "Handoff approved and transferred to Mister AI"}
-
-@router.post("/leads/{lead_id}/handoff/reject")
-async def reject_handoff(lead_id: int):
-    async with AsyncSessionLocal() as session:
-        target = await target_repo.get_target_by_id(session, lead_id)
-        if not target:
-            raise HTTPException(status_code=404, detail="Lead not found")
-        
-        target.handoff_status = "rejected"
-        await session.commit()
-        return {"status": "success", "message": "Handoff rejected"}
-
-@router.post("/leads/handoff/retry")
-async def retry_failed_handoffs():
-    count = await HandoffService.retry_failed_handoffs()
-    return {"status": "success", "retried_successes": count}

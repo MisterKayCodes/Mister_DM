@@ -4,7 +4,6 @@ from data.database import AsyncSessionLocal
 from data.repositories import target_repo
 from core.triage_engine import TriageEngine
 from providers.groq_client import groq_client
-from services.handoff_service import HandoffService
 from services.relationship_service import RelationshipService
 
 logger = logging.getLogger(__name__)

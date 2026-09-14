@@ -45,9 +45,3 @@ if not GROQ_API_KEY:
 # Parse comma-separated key pool list
 GROQ_API_KEY_LIST = [k.strip() for k in GROQ_API_KEY.split(",") if k.strip()]
 
-# Mister AI Integration Settings
-MISTER_AI_URL = os.getenv("MISTER_AI_URL", "http://localhost:8014")
-MISTER_AI_API_KEY = os.getenv("MISTER_AI_API_KEY")
-
-if not MISTER_AI_API_KEY:
-    raise ValueError("MISTER_AI_API_KEY is not set in the environment variables.")

@@ -6,7 +6,7 @@ import asyncio
 from data.database import init_db, AsyncSessionLocal
 from data.repositories import target_repo, campaign_repo
 from services.triage_service import TriageService
-from core.triage_engine import load_prompt, save_prompt, list_prompt_history, restore_prompt
+from core.triage_engine import TriageEngine
 
 async def test_phase4_triage():
     print("=== Testing Phase 4: Triage Engine & Groq Classification ===")
@@ -69,17 +69,17 @@ async def test_phase4_triage():
 
     # 4. Test Prompt Versioning & History Rollback
     print("\n4. Testing Prompt Versioning & Auto-Archiving...")
-    current_prompt = load_prompt()
-    version_id = save_prompt(current_prompt)
+    current_prompt = TriageEngine.load_prompt()
+    version_id = TriageEngine.save_prompt(current_prompt)
     print(f"Saved New Version: {version_id}")
 
-    history = list_prompt_history()
+    history = TriageEngine.list_prompt_history()
     print(f"Prompt History Items Count: {len(history)}")
     assert len(history) >= 1
 
     restored_filename = history[0]["filename"]
     print(f"Restoring archived prompt ({restored_filename})...")
-    restored = restore_prompt(restored_filename)
+    restored = TriageEngine.restore_prompt(restored_filename)
     print(f"Restored Version: {restored['version']}")
     assert restored["version"] == version_id
     print("--> Prompt Rollback PASSED!")

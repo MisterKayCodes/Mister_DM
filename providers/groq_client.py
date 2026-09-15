@@ -39,9 +39,7 @@ class GroqClient:
             "Content-Type": "application/json"
         }
         
-        req_model = self.model.replace("groq/", "") if self.model.startswith("groq/") else self.model
-        if req_model in ("compound-mini", "compound", ""):
-            req_model = "llama-3.3-70b-versatile"
+        req_model = self.model or "groq/compound-mini"
 
         payload = {
             "model": req_model,
@@ -64,6 +62,7 @@ class GroqClient:
                 elif response.status_code == 429:
                     groq_pool.mark_cooling(active_key, cooldown_seconds=60)
                     from services.groq_tracker import groq_tracker
+                    groq_tracker.record_usage({}, response.headers)
                     groq_tracker.set_backoff(60.0)
                     logger.warning(f"[GROQ_CLIENT] Rate limited (429) on key ...{active_key[-4:]}. Marked cooling.")
                 else:
@@ -103,13 +102,7 @@ class GroqClient:
             "Content-Type": "application/json"
         }
 
-        full_messages = [{"role": "system", "content": system_prompt}] + messages_history
-
-        req_model = model or getattr(config, "GROQ_ROLEPLAY_MODEL", None) or getattr(config, "GROQ_TRIAGE_MODEL", "llama-3.3-70b-versatile")
-        if req_model.startswith("groq/"):
-            req_model = req_model.replace("groq/", "")
-        if req_model in ("compound-mini", "compound", ""):
-            req_model = "llama-3.3-70b-versatile"
+        req_model = model or getattr(config, "GROQ_ROLEPLAY_MODEL", None) or getattr(config, "GROQ_TRIAGE_MODEL", "groq/compound-mini")
 
         payload = {
             "model": req_model,
@@ -129,6 +122,7 @@ class GroqClient:
                 elif response.status_code == 429:
                     groq_pool.mark_cooling(active_key, cooldown_seconds=60)
                     from services.groq_tracker import groq_tracker
+                    groq_tracker.record_usage({}, response.headers)
                     groq_tracker.set_backoff(60.0)
                     logger.warning(f"[GROQ_CLIENT] Rate limited (429) on roleplay key ...{active_key[-4:]}. Marked cooling.")
                 else:

@@ -13,10 +13,12 @@ async def check_quota():
         "Content-Type": "application/json"
     }
 
-    print(f"=== Checking Groq Quota Headers for Key ({api_key[:10]}...) ===")
+    req_model = getattr(config, "GROQ_TRIAGE_MODEL", "groq/compound-mini")
+
+    print(f"=== Checking Groq Quota Headers for Key ({api_key[:10]}...) [Model: {req_model}] ===")
 
     payload = {
-        "model": "groq/compound-mini",
+        "model": req_model,
         "messages": [
             {"role": "user", "content": "ping"}
         ],

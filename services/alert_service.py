@@ -131,3 +131,92 @@ class AlertService:
             logger.error(f"[ALERT_SERVICE] Failed to send admin alert: {e}", exc_info=True)
             return False
 
+    @staticmethod
+    async def send_draft_approval_alert(
+        draft_id: int,
+        target_id: int,
+        target_data: dict,
+        persona_name: str,
+        last_message: str,
+        intent_text: str,
+        draft_text: str
+    ) -> int | None:
+        """
+        Dispatches a Draft Approval card to War Room with Inline Buttons:
+        [ 🟢 Approve & Send ]   [ 🔴 Reject ]
+        Returns Telegram message_id if sent successfully.
+        """
+        target_group = config.WAR_ROOM_GROUP_ID
+        if not target_group:
+            logger.warning("[ALERT_SERVICE] WAR_ROOM_GROUP_ID is not configured. Draft alert skipped.")
+            return None
+
+        target_display = AlertService.format_target_display(target_data)
+
+        text = (
+            f"🛡️ <b>DRAFT APPROVAL REQUEST</b> (Training Wheels)\n\n"
+            f"<b>Target:</b> {safe_html(target_display)} ({safe_html(persona_name)})\n"
+            f"<b>Lead Last Message:</b> <i>\"{safe_html(last_message or 'None')}\"</i>\n\n"
+            f"🧠 <b>AI Intent:</b> <i>\"{safe_html(intent_text or 'Standard response')}\"</i>\n\n"
+            f"💬 <b>Proposed Reply:</b>\n"
+            f"<code>{safe_html(draft_text)}</code>"
+        )
+
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {"text": "🟢 Approve & Send", "callback_data": f"approve_draft:{draft_id}"},
+                    {"text": "🔴 Reject", "callback_data": f"reject_draft:{draft_id}"}
+                ]
+            ]
+        }
+
+        url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": target_group,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": reply_markup
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(url, json=payload)
+                data = response.json()
+                if data.get("ok"):
+                    msg_id = data["result"]["message_id"]
+                    logger.info(f"[ALERT_SERVICE] Successfully dispatched draft alert #{draft_id} (msg_id: {msg_id})")
+                    return msg_id
+                else:
+                    logger.error(f"[ALERT_SERVICE] Telegram API error sending draft alert: {data}")
+                    return None
+        except Exception as e:
+            logger.error(f"[ALERT_SERVICE] Failed to send draft alert: {e}", exc_info=True)
+            return None
+
+    @staticmethod
+    async def update_alert_message(message_id: int, new_text: str, remove_buttons: bool = True) -> bool:
+        """Edits an existing War Room Telegram card text and optionally removes its inline buttons."""
+        target_group = config.WAR_ROOM_GROUP_ID
+        if not target_group or not config.BOT_TOKEN or not message_id:
+            return False
+
+        url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/editMessageText"
+        payload = {
+            "chat_id": target_group,
+            "message_id": message_id,
+            "text": new_text,
+            "parse_mode": "HTML"
+        }
+        if remove_buttons:
+            payload["reply_markup"] = {"inline_keyboard": []}
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(url, json=payload)
+                data = response.json()
+                return data.get("ok", False)
+        except Exception as e:
+            logger.error(f"[ALERT_SERVICE] Failed to edit message {message_id}: {e}")
+            return False
+

@@ -21,14 +21,15 @@ class ReplyWebhookPayload(BaseModel):
     from_user_id: Optional[int] = None
     message_text: str
     timestamp: Optional[str] = None
+    direction: Optional[str] = "INBOUND"
 
 @router.post("/webhook/reply")
 async def receive_reply(payload: ReplyWebhookPayload):
     """
-    Inbound webhook called by Mister Simulator when a dm_warrior session receives a reply.
-    Updates target status to 'replied', logs INBOUND message, and fires Groq triage in background.
+    Inbound/Outbound webhook called by Mister Simulator when a dm_warrior session receives or sends a reply.
     """
     clean_username = payload.from_username.lstrip("@").strip()
+    is_outbound = (payload.direction or "").upper() == "OUTBOUND"
     
     async with AsyncSessionLocal() as session:
         # 1. Find target by telegram_user_id first (most reliable), then username
@@ -55,10 +56,10 @@ async def receive_reply(payload: ReplyWebhookPayload):
             target = result.scalar_one_or_none()
 
         if not target:
-            logger.warning(f"[WEBHOOK] Inbound reply from @{clean_username} — no matching sent target found. Ignoring.")
-            return {"status": "ignored", "reason": "No matching sent target found"}
+            logger.warning(f"[WEBHOOK] Webhook from @{clean_username} — no matching target found. Ignoring.")
+            return {"status": "ignored", "reason": "No matching target found"}
 
-        # 2. Update status to replied and verify/lock assigned_session
+        # 2. Update status and session lock
         target.status = "replied"
         if not target.replied_at:
             target.replied_at = func.now()
@@ -66,21 +67,33 @@ async def receive_reply(payload: ReplyWebhookPayload):
             target.telegram_user_id = payload.from_user_id
             
         if payload.session_name:
-            if target.assigned_session and target.assigned_session != payload.session_name:
-                logger.warning(
-                    f"[WEBHOOK] Session mismatch for @{target.username}: "
-                    f"bonded to '{target.assigned_session}', reply came via '{payload.session_name}'."
-                )
-            else:
-                target.assigned_session = payload.session_name
+            target.assigned_session = payload.session_name
         
+        # If outbound manual reply by operator, clear needs_human flag
+        if is_outbound:
+            target.needs_human = False
+
         await session.commit()
         
         target_id = target.id
         target_username = target.username
-        logger.info(f"[WEBHOOK] @{target_username} (ID: {target_id}, Session: {target.assigned_session or payload.session_name}) marked as replied. Firing triage...")
 
-        # 3. Log inbound reply message
+        # 3. Log message in database
+        if is_outbound:
+            from data.repositories import relationship_chats_repo, relationship_messages_repo
+            chat = await relationship_chats_repo.get_chat_by_target(session, target_id)
+            if chat:
+                await relationship_messages_repo.add_message(
+                    session=session,
+                    chat_id=chat.id,
+                    role="assistant",
+                    content=payload.message_text
+                )
+                await session.commit()
+            logger.info(f"[WEBHOOK] Outbound manual operator reply logged for @{target_username}")
+            return {"status": "success", "target_id": target_id, "synced": "outbound"}
+
+        # Inbound reply path
         ok_log, log_res = await MessageService.log_message(
             target_id=target_id,
             direction="INBOUND",
@@ -94,7 +107,7 @@ async def receive_reply(payload: ReplyWebhookPayload):
         else:
             await session.commit()
 
-    # 4. Fire triage in background (non-blocking)
+    # 4. Fire triage in background for inbound messages
     asyncio.create_task(TriageService.classify_lead(target_id, payload.message_text))
 
     return {

@@ -283,7 +283,74 @@ class RelationshipService:
                     "reply_text": reply_text
                 }
 
-            # 9. Send reply via Mister Simulator BEFORE committing assistant message to history
+            # 9. Handle APPROVAL_MODE (Training Wheels Mode) vs Direct Send Mode
+            from data.repositories import draft_repo
+            existing_draft = await draft_repo.get_pending_draft_for_target(session, target_id)
+            if existing_draft:
+                await draft_repo.mark_draft_superseded(session, existing_draft.id)
+                if existing_draft.war_room_message_id:
+                    from services.alert_service import AlertService
+                    asyncio.create_task(
+                        AlertService.update_alert_message(
+                            existing_draft.war_room_message_id,
+                            f"⚠️ <b>DRAFT SUPERSEDED</b>\n\nTarget @{target.username} sent a new message. Older draft was replaced."
+                        )
+                    )
+
+            if getattr(config, "APPROVAL_MODE", True):
+                logger.info(f"[RELATIONSHIP_SERVICE] 🛡️ APPROVAL_MODE active. Queuing draft for target @{target.username}...")
+                
+                pending_chapter = getattr(target, "_pending_arc_chapter", None)
+                pending_media = getattr(target, "_pending_arc_media", None)
+                media_json = json.dumps(pending_media) if pending_media else None
+
+                draft = await draft_repo.create_draft(
+                    session=session,
+                    target_id=target_id,
+                    chat_id=chat.id,
+                    draft_text=reply_text,
+                    intent_text=intent_text,
+                    confidence_score=confidence_score,
+                    session_name=target.assigned_session or session_name,
+                    pending_arc_chapter=pending_chapter,
+                    pending_media_json=media_json
+                )
+                await session.commit()
+
+                # Dispatch draft approval alert card to War Room
+                try:
+                    from services.alert_service import AlertService
+                    persona_name = persona.get("name") if isinstance(persona, dict) else (getattr(persona, "name", "Sarah") if persona else "Sarah")
+                    target_dict = {
+                        "id": target.id,
+                        "username": target.username,
+                        "first_name": getattr(target, "first_name", None) or target.note,
+                        "note": target.note
+                    }
+                    msg_id = await AlertService.send_draft_approval_alert(
+                        draft_id=draft.id,
+                        target_id=target.id,
+                        target_data=target_dict,
+                        persona_name=persona_name or "Sarah",
+                        last_message=inbound_message,
+                        intent_text=intent_text,
+                        draft_text=reply_text
+                    )
+                    if msg_id:
+                        await draft_repo.update_war_room_message_id(session, draft.id, msg_id)
+                        await session.commit()
+                except Exception as alert_exc:
+                    logger.error(f"[RELATIONSHIP_SERVICE] Failed to send draft approval alert: {alert_exc}")
+
+                return {
+                    "status": "draft_queued",
+                    "intent": intent_text,
+                    "confidence_score": confidence_score,
+                    "reply_text": reply_text,
+                    "draft_id": draft.id
+                }
+
+            # Direct Send Mode (APPROVAL_MODE == False)
             send_success = False
             send_session_name = target.assigned_session or session_name
             try:

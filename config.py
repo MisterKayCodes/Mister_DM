@@ -42,6 +42,7 @@ GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", "10"))
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY is not set in the environment variables.")
 
-# Parse comma-separated key pool list
-GROQ_API_KEY_LIST = [k.strip() for k in GROQ_API_KEY.split(",") if k.strip()]
+# Draft Approval Mode (Training Wheels)
+APPROVAL_MODE = os.getenv("APPROVAL_MODE", "true").lower() in ("true", "1", "yes")
+
 

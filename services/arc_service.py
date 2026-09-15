@@ -73,7 +73,21 @@ class ArcService:
             active_arc = await story_arc_repo.get_arc_by_chapter(session, persona_id, current_chapter)
             return active_arc.theme_text if active_arc else None
 
-        # 6. Fire attached chapter media via Simulator (best-effort, track success)
+        # 6. If APPROVAL_MODE (Training Wheels) is enabled, defer media fire and DB bump to draft approval time
+        if getattr(config, "APPROVAL_MODE", True):
+            logger.info(
+                f"[ARC_SERVICE] APPROVAL_MODE active. Deferring Chapter {earned_arc.chapter_number} "
+                f"media fire and DB advance for @{target.username} to draft approval time."
+            )
+            target._pending_arc_chapter = earned_arc.chapter_number
+            if media_items:
+                target._pending_arc_media = [
+                    {"telegram_file_id": m.telegram_file_id, "media_type": m.media_type}
+                    for m in media_items
+                ]
+            return earned_arc.theme_text
+
+        # 7. Fire attached chapter media via Simulator (Direct Mode)
         all_media_ok = True
         if media_items and session_name:
             for item in media_items:
@@ -106,8 +120,7 @@ class ArcService:
             active_arc = await story_arc_repo.get_arc_by_chapter(session, persona_id, current_chapter)
             return active_arc.theme_text if active_arc else None
 
-        # 7. Media delivery succeeded (or chapter has no media): Advance target.arc_chapter IN-MEMORY.
-        # RelationshipService owns the session and will commit this atomically at the end of the reply cycle.
+        # 8. Direct Mode: Media delivery succeeded (or chapter has no media). Advance target.arc_chapter IN-MEMORY.
         logger.info(
             f"[ARC_SERVICE] Target @{target.username} (ID: {target.id}) advanced "
             f"from Chapter {current_chapter} -> Chapter {earned_arc.chapter_number} "

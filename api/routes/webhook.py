@@ -83,6 +83,12 @@ async def receive_reply(payload: ReplyWebhookPayload):
             from data.repositories import relationship_chats_repo, relationship_messages_repo
             chat = await relationship_chats_repo.get_chat_by_target(session, target_id)
             if chat:
+                # Deduplication check: check if the latest assistant message already matches this content
+                recent = await relationship_messages_repo.get_recent_messages(session, chat.id, limit=1)
+                if recent and recent[0].role == "assistant" and recent[0].content.strip() == payload.message_text.strip():
+                    logger.info(f"[WEBHOOK] Outbound message for @{target_username} already logged by Mister DM. Skipping duplicate.")
+                    return {"status": "success", "target_id": target_id, "synced": "already_logged"}
+
                 await relationship_messages_repo.add_message(
                     session=session,
                     chat_id=chat.id,

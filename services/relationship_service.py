@@ -338,12 +338,12 @@ class RelationshipService:
 
     @staticmethod
     def _parse_ai_response(raw: str) -> dict:
-        """Safely parses Groq's JSON string response into dict fields."""
+        """Safely parses Groq's JSON string response into dict fields with safe-by-default fallback."""
         fallback = {
-            "intent": "Standard conversation response.",
-            "confidence_score": 75,
-            "needs_human": False,
-            "message": raw.strip()
+            "intent": "Model response failed JSON parsing — escalated to human review for safety.",
+            "confidence_score": 0,
+            "needs_human": True,
+            "message": ""
         }
         if not raw:
             return fallback
@@ -368,15 +368,18 @@ class RelationshipService:
                 except Exception:
                     conf = 75
 
-                msg = str(data.get("message", "")).strip() or raw.strip()
-                intent = str(data.get("intent", "No explicit intent provided.")).strip()
-                
                 # Robust needs_human parsing across booleans, strings ("true", "false", "yes"), and ints
                 needs_human_raw = data.get("needs_human", False)
                 if isinstance(needs_human_raw, str):
                     needs_human = needs_human_raw.strip().lower() in ("true", "1", "yes")
                 else:
                     needs_human = bool(needs_human_raw)
+
+                msg = str(data.get("message", "")).strip()
+                if not msg and not needs_human:
+                    msg = raw.strip()
+
+                intent = str(data.get("intent", "No explicit intent provided.")).strip()
 
                 return {
                     "intent": intent,
@@ -385,7 +388,7 @@ class RelationshipService:
                     "message": msg
                 }
         except Exception as exc:
-            logger.warning(f"[RELATIONSHIP_SERVICE] Failed to parse Groq JSON response ({exc}). Using fallback.")
+            logger.warning(f"[RELATIONSHIP_SERVICE] Failed to parse Groq JSON response ({exc}). Using safe-by-default fallback.")
 
         return fallback
 

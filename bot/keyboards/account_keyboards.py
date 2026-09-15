@@ -18,6 +18,9 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
                 KeyboardButton(text="📤 Export"),
                 KeyboardButton(text="🚫 Blacklist"),
                 KeyboardButton(text="⚔️ War Room")
+            ],
+            [
+                KeyboardButton(text="⚡ API Usage")
             ]
         ],
         resize_keyboard=True,  # Makes buttons smaller and more compact

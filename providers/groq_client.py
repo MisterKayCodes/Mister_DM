@@ -58,9 +58,13 @@ class GroqClient:
                 response = await client.post(self.base_url, headers=headers, json=payload)
                 if response.status_code == 200:
                     data = response.json()
+                    from services.groq_tracker import groq_tracker
+                    groq_tracker.record_usage(data.get("usage", {}), response.headers)
                     return data["choices"][0]["message"]["content"].strip()
                 elif response.status_code == 429:
                     groq_pool.mark_cooling(active_key, cooldown_seconds=60)
+                    from services.groq_tracker import groq_tracker
+                    groq_tracker.set_backoff(60.0)
                     logger.warning(f"[GROQ_CLIENT] Rate limited (429) on key ...{active_key[-4:]}. Marked cooling.")
                 else:
                     logger.warning(f"[GROQ_CLIENT] Groq API returned status {response.status_code}. Falling back to default.")
@@ -119,9 +123,13 @@ class GroqClient:
                 response = await client.post(self.base_url, headers=headers, json=payload)
                 if response.status_code == 200:
                     data = response.json()
+                    from services.groq_tracker import groq_tracker
+                    groq_tracker.record_usage(data.get("usage", {}), response.headers)
                     return data["choices"][0]["message"]["content"].strip()
                 elif response.status_code == 429:
                     groq_pool.mark_cooling(active_key, cooldown_seconds=60)
+                    from services.groq_tracker import groq_tracker
+                    groq_tracker.set_backoff(60.0)
                     logger.warning(f"[GROQ_CLIENT] Rate limited (429) on roleplay key ...{active_key[-4:]}. Marked cooling.")
                 else:
                     logger.warning(f"[GROQ_CLIENT] Groq API returned status {response.status_code}: {response.text}. Falling back to mock roleplay.")

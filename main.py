@@ -14,6 +14,7 @@ from bot.handlers.stats_handler import router as stats_handler
 from bot.handlers.blacklist_handler import router as blacklist_handler
 from bot.handlers.war_room_handler import router as war_room_handler
 from bot.handlers.approval_handler import router as approval_router
+from bot.handlers.dashboard_handlers import router as dashboard_router
 from services.campaign_service import CampaignService
 from services.account_service import AccountService
 from services.scheduler_service import SchedulerService
@@ -48,6 +49,7 @@ async def main():
     dp = Dispatcher()
     dp.include_router(war_room_handler)
     dp.include_router(approval_router)
+    dp.include_router(dashboard_router)
     dp.include_router(account_router)
     dp.include_router(campaign_router)
     dp.include_router(template_router)

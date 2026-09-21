@@ -25,14 +25,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. Public endpoints (no X-API-Key required — server-to-server webhook & health check)
+# 1. Public endpoints (no X-API-Key required — server-to-server webhook, stats & health check)
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(webhook_router, prefix="/api/v1")
+app.include_router(stats_router, prefix="/api/v1")
 
 # 2. Protected endpoints (require valid X-API-Key header)
 app.include_router(campaigns_router, prefix="/api/v1", dependencies=[Depends(verify_api_key)])
 app.include_router(leads_router, prefix="/api/v1", dependencies=[Depends(verify_api_key)])
-app.include_router(stats_router, prefix="/api/v1", dependencies=[Depends(verify_api_key)])
 
 async def start_api_server():
     server_config = uvicorn.Config(

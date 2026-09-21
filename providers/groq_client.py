@@ -102,6 +102,7 @@ class GroqClient:
             "Content-Type": "application/json"
         }
 
+        full_messages = [{"role": "system", "content": system_prompt}] + messages_history
         req_model = model or getattr(config, "GROQ_ROLEPLAY_MODEL", None) or getattr(config, "GROQ_TRIAGE_MODEL", "groq/compound-mini")
 
         payload = {

@@ -36,7 +36,7 @@ async def template_stats():
         return {"status": "success", "data": templates_data}
 
 
-@router.get("/api/v1/empire-ledger")
+@router.get("/empire-ledger")
 async def get_empire_ledger(limit: int = 50):
     """
     👑 Empire Standard Ledger Route for Mister DM.

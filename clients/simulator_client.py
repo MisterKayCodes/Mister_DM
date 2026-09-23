@@ -22,19 +22,18 @@ class SimulatorClient(BaseClient):
             return False
 
     async def get_dm_warrior_sessions(self, persona_tag: str | None = None) -> list[dict]:
-        """Fetches all active sessions tagged with 'dm_warrior' role, optionally matching persona_tag prefix."""
+        """Fetches all active sessions tagged explicitly with 'dm' or 'dm_warrior' role."""
         res = await self._request("GET", "/api/v1/sessions")
         sessions = res.get("sessions", []) if isinstance(res, dict) and "sessions" in res else (res.get("data", []) if isinstance(res, dict) else res)
         
-        # Filter for dm_warrior role and optional persona_tag prefix (e.g. "elena_" or "marcus_")
         dm_warriors = []
         for s in sessions:
-            roles = s.get("roles", ["dm_warrior"]) # fallback to treating session as warrior if listed
+            roles = [r.lower() for r in s.get("roles", [])]
             s_name = s.get("session_name") or s.get("name", "")
             
-            # Match role
-            is_warrior = "dm_warrior" in roles or not roles
-            if is_warrior and s.get("is_active", True):
+            # Match role strictly to 'dm' or 'dm_warrior'
+            is_dm_session = ("dm" in roles or "dm_warrior" in roles)
+            if is_dm_session and s.get("status", "online") in ("online", "active"):
                 if persona_tag:
                     clean_tag = persona_tag.lower().strip()
                     if s_name.lower().startswith(clean_tag):

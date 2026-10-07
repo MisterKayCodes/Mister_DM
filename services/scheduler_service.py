@@ -1,6 +1,7 @@
 import asyncio
 import random
 import logging
+from datetime import datetime
 from services.campaign_service import CampaignService
 from services.target_service import TargetService
 from services.template_service import TemplateService
@@ -91,6 +92,8 @@ class SchedulerService:
         The core engine loop. Delegating DM sends to Mister Simulator.
         """
         logger.info(f"[SCHEDULER] Started campaign {campaign_id} (Session: {session_name or 'Local Account'})")
+        restricted_sessions: dict[str, datetime] = {}
+        skipped_restricted_count = 0
         
         try:
             while True:
@@ -98,6 +101,20 @@ class SchedulerService:
                 if not campaign or campaign["status"] != "running":
                     logger.info(f"[SCHEDULER] Campaign {campaign_id} no longer running. Exiting loop.")
                     break
+                
+                # Check 20-minute TTL on restricted sessions against Mister Simulator API
+                now = datetime.now()
+                to_check = [s for s, restricted_at in list(restricted_sessions.items()) if (now - restricted_at).total_seconds() >= 1200]
+                for s in to_check:
+                    detail = await simulator_client.get_session_detail(s)
+                    if detail:
+                        s_data = detail.get("data", {})
+                        can_dm = s_data.get("capability_mask", {}).get("can_dm", True)
+                        if can_dm:
+                            logger.info(f"[SCHEDULER] Session '{s}' restriction cleared on Simulator. Re-enabling for campaign.")
+                            restricted_sessions.pop(s, None)
+                        else:
+                            restricted_sessions[s] = now
                     
                 # -------------------------------------------------------------
                 # Phase 10: Persona Sleep / Active Hours Check (Before pulling target)
@@ -247,6 +264,17 @@ class SchedulerService:
                     if picked_clone:
                         target_session = picked_clone
 
+                if target_session in restricted_sessions:
+                    if target.get("assigned_session") == target_session:
+                        await TargetService.set_assigned_session(target["id"], None)
+                        logger.info(f"[SCHEDULER] Unbonded target @{target['username']} from restricted session '{target_session}'")
+
+                    skipped_restricted_count += 1
+                    logger.warning(f"[SCHEDULER] Skipping target @{target['username']} (Session '{target_session}' is restricted). Total skipped: {skipped_restricted_count}")
+                    await asyncio.sleep(1.0)
+                    continue
+
+                is_restricted_session = False
                 if target_session:
                     try:
                         res = await simulator_client.send_dm(
@@ -264,6 +292,10 @@ class SchedulerService:
                     except APIResponseError as e:
                         logger.error(f"[SCHEDULER] Simulator API error: {e}")
                         success = False
+                        if getattr(e, "status_code", None) == 403 and "can_dm=False" in str(getattr(e, "detail", "")):
+                            is_restricted_session = True
+                            restricted_sessions[target_session] = datetime.now()
+
                 # Delegation Path B: Legacy Local Account Fallback
                 elif account and account.get("session_string"):
                     success, resolved_user_id = await send_outreach_message(
@@ -273,6 +305,16 @@ class SchedulerService:
                         dry_run=DRY_RUN
                     )
                     resolved_message_id = None
+
+                if is_restricted_session:
+                    if target.get("assigned_session") == target_session:
+                        await TargetService.set_assigned_session(target["id"], None)
+                        logger.info(f"[SCHEDULER] Unbonded target @{target['username']} from restricted session '{target_session}'")
+
+                    skipped_restricted_count += 1
+                    logger.warning(f"[SCHEDULER] Session '{target_session}' returned HTTP 403 restricted (can_dm=False). Leaving target @{target['username']} pending.")
+                    await asyncio.sleep(1.0)
+                    continue
 
                 new_status = "sent" if success else "failed"
                 await TargetService.update_target_status(
@@ -328,7 +370,7 @@ class SchedulerService:
             await CampaignService.update_campaign_status(campaign_id, "stopped")
         finally:
             SchedulerService.active_campaigns.pop(campaign_id, None)
-            logger.info(f"[SCHEDULER] Campaign {campaign_id} loop terminated.")
+            logger.info(f"[SCHEDULER] Campaign {campaign_id} loop terminated. Total leads skipped due to restricted sessions: {skipped_restricted_count}")
 
     @staticmethod
     async def pause_campaign(campaign_id: int) -> tuple[bool, str, str]:

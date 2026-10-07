@@ -72,6 +72,14 @@ class SimulatorClient(BaseClient):
                 
         return best_session or (warriors[0].get("session_name") or warriors[0].get("name"))
 
+    async def get_session_detail(self, session_name: str) -> dict | None:
+        """Fetches profile, status, and capability mask for a single session from Simulator API."""
+        try:
+            res = await self._request("GET", f"/api/v1/sessions/{session_name}")
+            return res if isinstance(res, dict) and res.get("success") else None
+        except Exception:
+            return None
+
     async def send_dm(
         self,
         session_name: str,

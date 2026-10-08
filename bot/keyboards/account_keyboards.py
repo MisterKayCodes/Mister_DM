@@ -5,7 +5,7 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text="📱 Accounts"),
+                KeyboardButton(text="📱 Fleet & Sessions"),
                 KeyboardButton(text="🎯 Campaigns"),
                 KeyboardButton(text="👥 Targets")
             ],
@@ -28,12 +28,11 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
     )
 
 def accounts_menu_keyboard() -> ReplyKeyboardMarkup:
-    """The accounts menu keyboard using ReplyKeyboard."""
+    """The Fleet & Sessions status menu keyboard."""
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text="➕ Add Account"),
-                KeyboardButton(text="📋 List Accounts")
+                KeyboardButton(text="🔄 Refresh Fleet Status")
             ],
             [
                 KeyboardButton(text="⬅️ Back to Main")

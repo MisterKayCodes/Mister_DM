@@ -41,13 +41,40 @@ async def main_menu_handler(message: Message, state: FSMContext):
         reply_markup=main_menu_keyboard()
     )
 
-@router.message(F.text.in_({"📱 Accounts", "⬅️ Back to Accounts"}), StateFilter("*"))
-async def accounts_menu_handler(message: Message, state: FSMContext):
+@router.message(F.text.in_({"📱 Fleet & Sessions", "📱 Accounts", "⬅️ Back to Accounts", "🔄 Refresh Fleet Status"}), StateFilter("*"))
+async def fleet_status_handler(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer(
-        "📱 Accounts Menu\nManage your Telegram outreach accounts.",
-        reply_markup=accounts_menu_keyboard()
-    )
+    from clients.simulator_client import simulator_client
+
+    warriors = await simulator_client.get_dm_warriors_detailed_status()
+
+    if not warriors:
+        text = "📱 <b>FLEET & DM WARRIORS STATUS</b>\n\n⚠️ No active DM Warrior sessions detected from Mister Simulator API."
+    else:
+        text = "📱 <b>FLEET & DM WARRIORS STATUS</b>\n\n"
+        for w in warriors:
+            s_name = safe_html(w["session_name"])
+            bonded = safe_html(w["bonded_campaign"]) if w["bonded_campaign"] else "<i>Unbonded</i>"
+
+            if w["is_restricted"]:
+                icon = "🟡"
+                status_str = f"DM Restricted (TTL: {w['ttl_remaining_mins']}m)"
+            elif w["status"] in ("online", "active"):
+                icon = "🟢"
+                status_str = "Online (Active)"
+            else:
+                icon = "🔴"
+                status_str = safe_html(w["status"].capitalize())
+
+            text += (
+                f"{icon} <b>{s_name}</b> (Simulator)\n"
+                f" ├ <b>Status:</b> {status_str}\n"
+                f" ├ <b>Campaign:</b> {bonded}\n"
+                f" ├ <b>DMs Today:</b> {w['sent_today']} / {w['daily_limit']}\n"
+                f" └ <b>Delay:</b> {w['delay_range']}\n\n"
+            )
+
+    await message.answer(text, reply_markup=accounts_menu_keyboard(), parse_mode="HTML")
 
 # ==========================================
 # ADD ACCOUNT WIZARD (FSM)

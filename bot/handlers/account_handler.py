@@ -46,7 +46,16 @@ async def fleet_status_handler(message: Message, state: FSMContext):
     await state.clear()
     from clients.simulator_client import simulator_client
 
-    warriors = await simulator_client.get_dm_warriors_detailed_status()
+    try:
+        warriors = await simulator_client.get_dm_warriors_detailed_status()
+    except Exception as e:
+        logger.error(f"[FLEET UI] Failed to fetch fleet status: {e}")
+        await message.answer(
+            "📱 <b>FLEET & DM WARRIORS STATUS</b>\n\n❌ <b>Error:</b> Unable to connect to Mister Simulator API.\nEnsure Mister Simulator service is running on VPS.",
+            reply_markup=accounts_menu_keyboard(),
+            parse_mode="HTML"
+        )
+        return
 
     if not warriors:
         text = "📱 <b>FLEET & DM WARRIORS STATUS</b>\n\n⚠️ No active DM Warrior sessions detected from Mister Simulator API."

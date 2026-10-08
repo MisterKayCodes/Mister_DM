@@ -9,6 +9,7 @@ from services.account_service import AccountService
 from services.blacklist_service import BlacklistService
 from services.message_service import MessageService
 from services.telethon_client import send_outreach_message
+from services.state import restricted_sessions
 from clients.simulator_client import simulator_client
 from clients.exceptions import APIUnavailableError, APIResponseError
 from data.database import AsyncSessionLocal
@@ -92,7 +93,6 @@ class SchedulerService:
         The core engine loop. Delegating DM sends to Mister Simulator.
         """
         logger.info(f"[SCHEDULER] Started campaign {campaign_id} (Session: {session_name or 'Local Account'})")
-        restricted_sessions: dict[str, datetime] = {}
         skipped_restricted_count = 0
         
         try:
@@ -415,4 +415,6 @@ class SchedulerService:
                     await task
                 except asyncio.CancelledError:
                     pass
+        restricted_sessions.clear()
+        SchedulerService.asleep_personas.clear()
         logger.info("[SCHEDULER] All active campaigns cleanly stopped.")

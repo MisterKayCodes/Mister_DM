@@ -49,7 +49,7 @@ class SimulatorClient(BaseClient):
         """
         from services.campaign_service import CampaignService
         from services.account_service import AccountService
-        from services.scheduler_service import restricted_sessions
+        from services.state import restricted_sessions
         from datetime import datetime, timezone
 
         try:

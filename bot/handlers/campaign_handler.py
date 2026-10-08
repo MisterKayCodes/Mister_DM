@@ -88,16 +88,20 @@ async def process_campaign_name(message: Message, state: FSMContext):
         accounts = await AccountService.get_all_accounts()
     except Exception as e:
         logger.error(f"Failed to fetch accounts during campaign creation: {e}")
-        await message.answer(CAMP_LOAD_ERROR, reply_markup=campaigns_menu_keyboard())
-        await state.clear()
-        return
+        accounts = []
 
-    if not accounts:
+    sim_sessions = []
+    try:
+        sim_sessions = await simulator_client.get_dm_warrior_sessions(persona_tag=None)
+    except Exception as e:
+        logger.error(f"Failed to fetch Simulator sessions: {e}")
+
+    if not accounts and not sim_sessions:
         await message.answer(CAMP_NO_ACCOUNTS, reply_markup=campaigns_menu_keyboard())
         await state.clear()
         return
 
-    await message.answer(CAMP_ASK_ACCOUNT, reply_markup=select_account_keyboard(accounts))
+    await message.answer(CAMP_ASK_ACCOUNT, reply_markup=select_account_keyboard(accounts, simulator_sessions=sim_sessions))
     await state.set_state(AddCampaignStates.waiting_for_account)
 
 
@@ -110,29 +114,47 @@ async def process_campaign_account(message: Message, state: FSMContext):
         await message.answer(CAMP_CANCELLED, reply_markup=campaigns_menu_keyboard())
         return
 
-    if not text.startswith("📧 "):
+    account_id = None
+    account_name = ""
+    session_name = None
+
+    if text.startswith("📧 "):
+        account_name = _strip_prefix(text, "📧 ")
+        try:
+            account = await AccountService.get_account_by_name(account_name)
+        except Exception as e:
+            logger.error(f"Failed to fetch account '{account_name}': {e}")
+            await message.answer(CAMP_LOAD_ERROR, reply_markup=campaigns_menu_keyboard())
+            await state.clear()
+            return
+
+        if not account:
+            await message.answer(CAMP_ACCOUNT_GONE)
+            return
+
+        account_id = account["id"]
+
+    elif text.startswith("🤖 "):
+        # Parse session_name: "🤖 KenjiBeard (Simulator)" -> "KenjiBeard"
+        session_name = text.replace("🤖 ", "").replace(" (Simulator)", "").strip()
+        try:
+            account = await AccountService.ensure_simulator_account(session_name)
+            account_id = account["id"]
+            account_name = f"{session_name} (Simulator)"
+        except Exception as e:
+            logger.error(f"Failed to auto-register simulator account '{session_name}': {e}")
+            await message.answer(CAMP_LOAD_ERROR, reply_markup=campaigns_menu_keyboard())
+            await state.clear()
+            return
+    else:
         await message.answer(CAMP_USE_KEYBOARD)
-        return
-
-    account_name = _strip_prefix(text, "📧 ")
-
-    try:
-        account = await AccountService.get_account_by_name(account_name)
-    except Exception as e:
-        logger.error(f"Failed to fetch account '{account_name}': {e}")
-        await message.answer(CAMP_LOAD_ERROR, reply_markup=campaigns_menu_keyboard())
-        await state.clear()
-        return
-
-    if not account:
-        await message.answer(CAMP_ACCOUNT_GONE)
         return
 
     data = await state.get_data()
     campaign_name = data.get("name")
 
     try:
-        success, msg = await CampaignService.add_campaign(campaign_name, account["id"])
+        success, msg = await CampaignService.add_campaign(campaign_name, account_id, session_name=session_name)
     except Exception as e:
         logger.error(f"Failed to create campaign '{campaign_name}': {e}")
         await message.answer(CAMP_LOAD_ERROR, reply_markup=campaigns_menu_keyboard())
@@ -141,7 +163,7 @@ async def process_campaign_account(message: Message, state: FSMContext):
 
     if success:
         await message.answer(
-            CAMP_CREATE_OK.format(name=safe_html(campaign_name), account=safe_html(account["name"])),
+            CAMP_CREATE_OK.format(name=safe_html(campaign_name), account=safe_html(account_name)),
             reply_markup=campaigns_menu_keyboard(),
             parse_mode="HTML"
         )

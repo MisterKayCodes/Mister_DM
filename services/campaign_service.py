@@ -19,7 +19,7 @@ class CampaignService:
     # ─── CREATE ────────────────────────────────────────────────────────────────
 
     @staticmethod
-    async def add_campaign(name: str, account_id: int, session: AsyncSession = None) -> tuple[bool, str]:
+    async def add_campaign(name: str, account_id: int, session_name: str = None, session: AsyncSession = None) -> tuple[bool, str]:
         async def _execute(sess: AsyncSession):
             name_clean = name.strip()
             if not name_clean:
@@ -32,7 +32,7 @@ class CampaignService:
             if existing:
                 return False, f"A campaign named '{name_clean}' already exists."
 
-            await campaign_repo.insert_campaign(sess, name_clean, account_id)
+            await campaign_repo.insert_campaign(sess, name_clean, account_id, session_name=session_name)
             return True, "Campaign created successfully."
 
         if session is None:

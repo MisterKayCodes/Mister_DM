@@ -17,13 +17,21 @@ def campaigns_menu_keyboard() -> ReplyKeyboardMarkup:
         one_time_keyboard=False
     )
 
-def select_account_keyboard(accounts: list[Account]) -> ReplyKeyboardMarkup:
+def select_account_keyboard(accounts: list = None, simulator_sessions: list = None) -> ReplyKeyboardMarkup:
     """Keyboard for selecting an account during campaign creation."""
     keyboard = []
     
-    # Add each account as a button 
-    for acc in accounts:
-        keyboard.append([KeyboardButton(text=f"📧 {acc['name']}")])
+    # Add Mister Simulator Fleet Sessions first
+    if simulator_sessions:
+        for s in simulator_sessions:
+            name = s.get("session_name") or s.get("name") if isinstance(s, dict) else str(s)
+            if name:
+                keyboard.append([KeyboardButton(text=f"🤖 {name} (Simulator)")])
+
+    # Add local DB accounts
+    if accounts:
+        for acc in accounts:
+            keyboard.append([KeyboardButton(text=f"📧 {acc['name']}")])
         
     # Add cancel button
     keyboard.append([KeyboardButton(text="❌ Cancel Creation")])

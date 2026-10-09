@@ -4,7 +4,7 @@ from data.database import AsyncSessionLocal
 from data.repositories import target_repo
 from core.triage_engine import TriageEngine
 from providers.groq_client import groq_client
-from services.relationship_service import RelationshipService
+from services.leads import RelationshipService
 
 logger = logging.getLogger(__name__)
 

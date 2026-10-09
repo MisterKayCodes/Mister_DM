@@ -104,7 +104,7 @@ class RelationshipService:
                 await session.commit()
 
                 try:
-                    from services.alert_service import AlertService
+                    from services.notifications import AlertService
                     persona_name = persona.get("name") if isinstance(persona, dict) else (getattr(persona, "name", "Sarah") if persona else "Sarah")
                     target_dict = {
                         "id": target.id,
@@ -153,7 +153,7 @@ class RelationshipService:
             # Process NLP Mirroring via IntelligenceService
             mirror_profile = None
             try:
-                from services.intelligence_service import intelligence_service
+                from services.leads.intelligence_service import intelligence_service
                 mirror_profile = await intelligence_service.process_inbound_message(
                     session=session,
                     target_id=target_id,
@@ -165,7 +165,7 @@ class RelationshipService:
             # Process Story Arc Progression & Media Injection (Phase 11)
             arc_theme = None
             try:
-                from services.arc_service import ArcService
+                from services.leads import ArcService
                 arc_theme = await ArcService.check_and_advance(
                     session=session,
                     target=target,
@@ -257,7 +257,7 @@ class RelationshipService:
 
                 # Dispatch War Room Alert to Telegram Group asynchronously
                 try:
-                    from services.alert_service import AlertService
+                    from services.notifications import AlertService
                     persona_name = persona.get("name") if isinstance(persona, dict) else (getattr(persona, "name", "Sarah") if persona else "Sarah")
                     target_dict = {
                         "id": target.id,
@@ -289,7 +289,7 @@ class RelationshipService:
             if existing_draft:
                 await draft_repo.mark_draft_superseded(session, existing_draft.id)
                 if existing_draft.war_room_message_id:
-                    from services.alert_service import AlertService
+                    from services.notifications import AlertService
                     asyncio.create_task(
                         AlertService.update_alert_message(
                             existing_draft.war_room_message_id,
@@ -319,7 +319,7 @@ class RelationshipService:
 
                 # Dispatch draft approval alert card to War Room
                 try:
-                    from services.alert_service import AlertService
+                    from services.notifications import AlertService
                     persona_name = persona.get("name") if isinstance(persona, dict) else (getattr(persona, "name", "Sarah") if persona else "Sarah")
                     target_dict = {
                         "id": target.id,

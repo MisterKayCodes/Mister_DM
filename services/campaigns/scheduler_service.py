@@ -2,12 +2,11 @@ import asyncio
 import random
 import logging
 from datetime import datetime
-from services.campaign_service import CampaignService
-from services.target_service import TargetService
-from services.template_service import TemplateService
-from services.account_service import AccountService
-from services.blacklist_service import BlacklistService
-from services.message_service import MessageService
+from services.campaigns.campaign_service import CampaignService
+from services.leads import TargetService
+from services.campaigns.template_service import TemplateService
+from services.accounts import AccountService, BlacklistService
+from services.messaging import MessageService
 from clients.telethon_client import send_outreach_message
 from core.state import restricted_sessions
 from clients.simulator_client import simulator_client
@@ -146,7 +145,7 @@ class SchedulerService:
                             SchedulerService.asleep_personas.add(persona_id)
                             logger.info(f"[SCHEDULER] Persona {persona_name} is sleeping (TZ: {timezone_str}, Window: {active_hours_str}).")
                             try:
-                                from services.alert_service import AlertService
+                                from services.notifications import AlertService
                                 from utils.telegram_utils import safe_html
                                 asyncio.create_task(AlertService.send_admin_alert(
                                     f"💤 <b>{safe_html(persona_name)} is currently sleeping</b>\n"

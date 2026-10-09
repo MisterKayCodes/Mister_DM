@@ -10,7 +10,7 @@ import config
 from data.database import init_db, AsyncSessionLocal
 from data.repositories import target_repo, campaign_repo, blacklist_repo, template_repo, message_repo, account_repo
 from services.scheduler_service import SchedulerService
-from services.export_service import ExportService
+from utils.export_utils import ExportService
 from clients.simulator_client import simulator_client
 from api.server import app
 

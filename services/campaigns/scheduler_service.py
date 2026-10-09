@@ -8,8 +8,8 @@ from services.template_service import TemplateService
 from services.account_service import AccountService
 from services.blacklist_service import BlacklistService
 from services.message_service import MessageService
-from services.telethon_client import send_outreach_message
-from services.state import restricted_sessions
+from clients.telethon_client import send_outreach_message
+from core.state import restricted_sessions
 from clients.simulator_client import simulator_client
 from clients.exceptions import APIUnavailableError, APIResponseError
 from data.database import AsyncSessionLocal

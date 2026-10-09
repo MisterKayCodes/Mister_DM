@@ -47,9 +47,9 @@ class SimulatorClient(BaseClient):
         Fetches all DM Warrior sessions with full detail from Mister Simulator API,
         cross-referenced with bonded campaigns in Mister DM.
         """
-        from services.campaign_service import CampaignService
+        from services.campaigns import CampaignService
         from services.account_service import AccountService
-        from services.state import restricted_sessions
+        from core.state import restricted_sessions
         from datetime import datetime, timezone
 
         try:
@@ -109,7 +109,7 @@ class SimulatorClient(BaseClient):
         queries Mister DM database for each warrior's active target load,
         and returns the session_name of the warrior with the lowest load.
         """
-        from services.target_service import TargetService
+        from services.leads import TargetService
         
         warriors = await self.get_dm_warrior_sessions(persona_tag=persona_tag)
         if not warriors and persona_tag:

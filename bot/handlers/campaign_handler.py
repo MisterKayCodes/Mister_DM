@@ -21,9 +21,8 @@ from bot.constants.messages import (
     CAMP_DELETE_INVALID, CAMP_DELETE_CONFIRM, CAMP_DELETE_BLOCKED,
     CAMP_DELETE_OK, CAMP_DELETE_FAIL
 )
-from services.campaign_service import CampaignService
-from services.account_service import AccountService
-from services.scheduler_service import SchedulerService
+from services.campaigns import CampaignService, SchedulerService
+from services.accounts import AccountService
 from utils.telegram_utils import safe_html
 from bot.utils.ui_layouts import build_campaign_summary_text
 

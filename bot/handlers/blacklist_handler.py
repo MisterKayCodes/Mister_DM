@@ -8,7 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 from bot.keyboards.blacklist_keyboards import blacklist_menu_keyboard
 from bot.keyboards.account_keyboards import main_menu_keyboard
-from services.blacklist_service import BlacklistService
+from services.accounts import BlacklistService
 from utils.telegram_utils import safe_html
 
 router = Router()

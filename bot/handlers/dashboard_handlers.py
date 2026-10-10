@@ -3,7 +3,7 @@ from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.enums import ParseMode
 
-from services.groq_tracker import groq_tracker
+from providers.groq_tracker import groq_tracker
 import config
 
 logger = logging.getLogger(__name__)

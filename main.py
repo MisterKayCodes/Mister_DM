@@ -15,9 +15,8 @@ from bot.handlers.blacklist_handler import router as blacklist_handler
 from bot.handlers.war_room_handler import router as war_room_handler
 from bot.handlers.approval_handler import router as approval_router
 from bot.handlers.dashboard_handlers import router as dashboard_router
-from services.campaign_service import CampaignService
-from services.account_service import AccountService
-from services.scheduler_service import SchedulerService
+from services.campaigns import CampaignService, SchedulerService
+from services.accounts import AccountService
 from api.server import start_api_server
 
 logging.basicConfig(level=logging.INFO)

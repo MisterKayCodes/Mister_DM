@@ -4,9 +4,9 @@ import logging
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from config import TELETHON_API_ID, TELETHON_API_HASH
-from services.account_service import AccountService
+from services.accounts import AccountService
 from services.leads import TargetService
-from services.message_service import MessageService
+from services.messaging import MessageService
 from data.database import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)

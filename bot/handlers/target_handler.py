@@ -16,8 +16,8 @@ from bot.keyboards.navigation_keyboards import back_and_home_inline
 from bot.keyboards.account_keyboards import main_menu_keyboard
 
 from bot.keyboards.campaign_keyboards import campaigns_menu_keyboard
-from services.target_service import TargetService
-from services.campaign_service import CampaignService
+from services.leads import TargetService
+from services.campaigns import CampaignService
 from utils.telegram_utils import safe_html
 
 router = Router()

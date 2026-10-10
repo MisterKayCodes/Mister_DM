@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from services.campaign_service import CampaignService
-from services.scheduler_service import SchedulerService
+from services.campaigns import CampaignService, SchedulerService
 from data.database import AsyncSessionLocal
 from data.repositories import campaign_repo, stats_repo
 from utils.dto_builders import campaign_to_dto

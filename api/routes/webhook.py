@@ -8,8 +8,8 @@ from data.repositories import target_repo
 from data.models.target import Target
 from sqlalchemy import select
 from sqlalchemy.sql import func
-from services.triage_service import TriageService
-from services.message_service import MessageService
+from services.leads import TriageService
+from services.messaging import MessageService
 
 logger = logging.getLogger(__name__)
 

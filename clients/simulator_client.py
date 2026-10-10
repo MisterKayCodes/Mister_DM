@@ -48,7 +48,7 @@ class SimulatorClient(BaseClient):
         cross-referenced with bonded campaigns in Mister DM.
         """
         from services.campaigns import CampaignService
-        from services.account_service import AccountService
+        from services.accounts import AccountService
         from core.state import restricted_sessions
         from datetime import datetime, timezone
 

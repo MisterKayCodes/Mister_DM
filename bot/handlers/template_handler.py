@@ -9,8 +9,7 @@ from bot.keyboards.template_keyboards import (
     confirm_template_delete_keyboard
 )
 from bot.keyboards.campaign_keyboards import campaigns_menu_keyboard
-from services.template_service import TemplateService
-from services.campaign_service import CampaignService
+from services.campaigns import TemplateService, CampaignService
 from utils.telegram_utils import safe_html
 from bot.utils.ui_layouts import build_campaign_summary_text, build_templates_list_text
 

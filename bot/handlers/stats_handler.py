@@ -5,7 +5,7 @@ from aiogram.filters import StateFilter, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
 
-from services.stats_service import StatsService
+from services.reporting import StatsService
 
 router = Router()
 logger = logging.getLogger(__name__)

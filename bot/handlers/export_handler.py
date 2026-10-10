@@ -8,7 +8,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
-from services.export_service import ExportService
+from utils.export_utils import ExportService
 
 router = Router()
 logger = logging.getLogger(__name__)

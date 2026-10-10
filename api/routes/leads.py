@@ -5,7 +5,7 @@ from data.database import AsyncSessionLocal
 from data.repositories import target_repo
 from data.models.target import Target
 from utils.dto_builders import target_to_dto
-from services.intake_service import IntakeService
+from services.leads import IntakeService
 from sqlalchemy import select
 
 router = APIRouter(tags=["Leads"])

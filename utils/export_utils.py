@@ -2,7 +2,7 @@
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from data.database import AsyncSessionLocal
-from services.message_service import MessageService
+from services.messaging import MessageService
 from services.leads import TargetService
 from services.campaigns import CampaignService
 from utils.file_generator import generate_target_export, generate_campaign_export

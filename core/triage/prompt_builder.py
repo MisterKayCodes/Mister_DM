@@ -9,7 +9,7 @@ Takes data, returns strings. Same input → same output always.
 """
 
 import json
-from core.week_arc import get_week_label, get_week_tone
+from core.arcs.week_arc import get_week_label, get_week_tone
 
 
 # ──────────────────────────────────────────────────────────────────────────────

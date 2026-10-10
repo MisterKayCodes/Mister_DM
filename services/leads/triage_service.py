@@ -2,7 +2,7 @@ import asyncio
 import logging
 from data.database import AsyncSessionLocal
 from data.repositories import target_repo
-from core.triage_engine import TriageEngine
+from core.triage.triage_engine import TriageEngine
 from providers.groq_client import groq_client
 from services.leads.relationship_service import RelationshipService
 

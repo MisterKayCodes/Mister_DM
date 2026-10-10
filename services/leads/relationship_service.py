@@ -11,9 +11,9 @@ from data.repositories import (
     relationship_messages_repo,
     intents_repo
 )
-from core.prompt_builder import build_roleplay_prompt, build_intel_extraction_prompt
-from core.topic_classifier import build_classification_prompt
-from core.intel_parser import parse_intel_response
+from core.triage.prompt_builder import build_roleplay_prompt, build_intel_extraction_prompt
+from core.triage.topic_classifier import build_classification_prompt
+from core.triage.intel_parser import parse_intel_response
 from providers.groq_client import groq_client
 from clients.simulator_client import simulator_client
 

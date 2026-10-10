@@ -165,7 +165,7 @@ class RelationshipService:
             # Process Story Arc Progression & Media Injection (Phase 11)
             arc_theme = None
             try:
-                from services.leads import ArcService
+                from services.leads.arc_service import ArcService
                 arc_theme = await ArcService.check_and_advance(
                     session=session,
                     target=target,

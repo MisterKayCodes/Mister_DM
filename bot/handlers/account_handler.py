@@ -41,6 +41,16 @@ async def main_menu_handler(message: Message, state: FSMContext):
         reply_markup=main_menu_keyboard()
     )
 
+@router.message(F.text.in_({"⚙️ Settings", "Settings"}), StateFilter("*"))
+async def settings_menu_handler(message: Message, state: FSMContext):
+    await state.clear()
+    from bot.keyboards.account_keyboards import settings_menu_keyboard
+    await message.answer(
+        "⚙️ <b>Settings & System Tools</b>\n\nManage your fleet accounts, review metrics, blacklist, or check API tokens:",
+        reply_markup=settings_menu_keyboard(),
+        parse_mode="HTML"
+    )
+
 @router.message(F.text.in_({"📱 Fleet & Sessions", "📱 Accounts", "⬅️ Back to Accounts", "🔄 Refresh Fleet Status"}), StateFilter("*"))
 async def fleet_status_handler(message: Message, state: FSMContext):
     await state.clear()

@@ -58,7 +58,7 @@ def _campaigns_list_reply(campaigns: list[dict]):
 # NAVIGATION
 # ==========================================
 
-@router.message(F.text.in_({"🎯 Campaigns", "⬅️ Back to Campaigns"}), StateFilter("*"))
+@router.message(F.text.in_({"📤 Ready to Send", "Ready to Send", "🎯 Campaigns", "⬅️ Back to Campaigns"}), StateFilter("*"))
 async def campaigns_menu_handler(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(CAMP_MENU_HEADER, reply_markup=campaigns_menu_keyboard())

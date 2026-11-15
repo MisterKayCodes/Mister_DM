@@ -88,6 +88,15 @@ async def nav_home_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+@router.message(F.text.in_({"👥 Find People", "Find People", "👥 Targets"}), StateFilter("*"))
+async def find_people_root_menu(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer(
+        "👥 <b>Find & Add People</b>\n\nHow would you like to collect people to message?",
+        reply_markup=import_method_keyboard(),
+        parse_mode="HTML"
+    )
+
 # ──────────────────────────────────────────────
 # ADD TARGETS
 # ──────────────────────────────────────────────

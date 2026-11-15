@@ -1,30 +1,40 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
-    """The main menu keyboard using ReplyKeyboard."""
+    """The simplified 4-pillar main menu keyboard."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="👥 Find People"),
+                KeyboardButton(text="📤 Ready to Send")
+            ],
+            [
+                KeyboardButton(text="💬 Inbox"),
+                KeyboardButton(text="⚙️ Settings")
+            ]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=False
+    )
+
+def settings_menu_keyboard() -> ReplyKeyboardMarkup:
+    """The Settings & Tools sub-menu keyboard."""
     return ReplyKeyboardMarkup(
         keyboard=[
             [
                 KeyboardButton(text="📱 Fleet & Sessions"),
-                KeyboardButton(text="🎯 Campaigns"),
-                KeyboardButton(text="👥 Targets")
-            ],
-            [
-                KeyboardButton(text="💬 Replies"),
-                KeyboardButton(text="🏷 Pain Points"),
                 KeyboardButton(text="📊 Stats")
             ],
             [
-                KeyboardButton(text="📤 Export"),
                 KeyboardButton(text="🚫 Blacklist"),
-                KeyboardButton(text="⚔️ War Room")
+                KeyboardButton(text="⚡ API Usage")
             ],
             [
-                KeyboardButton(text="⚡ API Usage")
+                KeyboardButton(text="⬅️ Back to Main")
             ]
         ],
-        resize_keyboard=True,  # Makes buttons smaller and more compact
-        one_time_keyboard=False  # Stays visible after use
+        resize_keyboard=True,
+        one_time_keyboard=False
     )
 
 def accounts_menu_keyboard() -> ReplyKeyboardMarkup:

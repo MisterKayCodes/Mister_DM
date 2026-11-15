@@ -34,7 +34,7 @@ async def _show_target_profile(message_or_callback, target_id: int, edit: bool =
 
 # ─── REPLIES LIST ──────────────────────────────────────────────────────────────
 
-@router.message(F.text == "💬 Replies", StateFilter("*"))
+@router.message(F.text.in_({"💬 Inbox", "Inbox", "💬 Replies"}), StateFilter("*"))
 async def view_replies_list(message: Message, state: FSMContext):
     await state.clear()
 

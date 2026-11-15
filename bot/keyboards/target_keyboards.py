@@ -1,4 +1,4 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 
 def import_method_keyboard() -> ReplyKeyboardMarkup:
@@ -33,6 +33,20 @@ def scout_depth_keyboard() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         one_time_keyboard=True
+    )
+
+
+def scout_actions_keyboard() -> InlineKeyboardMarkup:
+    """Inline action buttons under a scouted chat transcript."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🚀 Create Campaign with Leads", callback_data="scout_create_campaign")
+            ],
+            [
+                InlineKeyboardButton(text="📋 Copy Usernames", callback_data="scout_copy_handles")
+            ]
+        ]
     )
 
 

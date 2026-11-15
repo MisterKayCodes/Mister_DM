@@ -5,7 +5,7 @@ from aiogram.types import Message, ReplyKeyboardRemove, BufferedInputFile, Callb
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
 from bot.states.target_states import AddTargetStates
-from bot.keyboards.target_keyboards import import_method_keyboard, confirm_clear_keyboard
+from bot.keyboards.target_keyboards import import_method_keyboard, confirm_clear_keyboard, scout_actions_keyboard, scout_depth_keyboard
 from bot.keyboards.template_keyboards import manage_campaign_keyboard
 from bot.keyboards.navigation_keyboards import back_and_home_inline
 
@@ -223,19 +223,89 @@ async def process_scout_depth_and_run(message: Message, state: FSMContext):
     if len(sorted_chatters) > 12:
         summary_lines.append(f"\n<i>...and {len(sorted_chatters) - 12} more people.</i>")
 
-    # Generate txt file with all handles
-    handles_text = "\n".join([f"{handle} | {info['name']} | {info['last_msg']}" for handle, info in sorted_chatters])
-    file_bytes = io.BytesIO(handles_text.encode("utf-8"))
-    file_input = BufferedInputFile(file_bytes.getvalue(), filename=f"scout_{len(sorted_chatters)}_people.txt")
+    # Format chronological transcript for external AI analysis
+    # messages from Telethon come newest first; reverse for natural screenplay chronology
+    chrono_messages = list(reversed(messages))
+    transcript_lines = [
+        "==============================================================",
+        "TELEGRAM CHAT TRANSCRIPT (EXTERNAL AI ANALYSIS READY)",
+        f"Source: {target_group}",
+        f"Messages Scanned: {len(chrono_messages)}",
+        f"Active Leads Found: {len(sorted_chatters)}",
+        "==============================================================\n"
+    ]
+
+    for m in chrono_messages:
+        date_str = (m.get("date") or "")[:19].replace("T", " ")
+        sender = m.get("sender_username")
+        handle_str = f"@{sender}" if sender else "(no @username)"
+        name_str = m.get("sender_name") or "User"
+        txt = (m.get("text") or "").strip()
+        if not txt and m.get("has_media"):
+            txt = "[Media / Attachment]"
+        transcript_lines.append(f"[{date_str}] {handle_str} ({name_str}): {txt}")
+
+    transcript_text = "\n".join(transcript_lines)
+    file_bytes = io.BytesIO(transcript_text.encode("utf-8"))
+    file_input = BufferedInputFile(file_bytes.getvalue(), filename=f"chat_transcript_{len(chrono_messages)}.txt")
+
+    # Save handles in FSM for 1-tap campaign creation
+    all_handles = [h for h, _ in sorted_chatters]
+    await state.update_data(scouted_handles=all_handles, scouted_target_group=target_group)
 
     await status_msg.delete()
     await message.answer_document(
         document=file_input,
         caption="\n".join(summary_lines),
         parse_mode="HTML",
+        reply_markup=scout_actions_keyboard()
+    )
+    await message.answer(
+        "💡 <b>Transcript Ready!</b>\n"
+        "• Send the file above to Claude/Gemini to analyze buyer intent.\n"
+        "• Or tap below to create an outreach campaign from these leads immediately:",
+        parse_mode="HTML",
         reply_markup=main_menu_keyboard()
     )
-    await state.clear()
+
+
+# ──────────────────────────────────────────────
+# SCOUT ACTION CALLBACKS (1-Tap Campaign / Copy)
+# ──────────────────────────────────────────────
+
+@router.callback_query(F.data == "scout_copy_handles")
+async def cb_scout_copy_handles(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    handles = data.get("scouted_handles", [])
+    if not handles:
+        await callback.answer("No handles stored in current session.", show_alert=True)
+        return
+
+    handles_str = "\n".join(handles)
+    await callback.message.answer(
+        f"📋 <b>Extracted Usernames ({len(handles)}):</b>\n\n<pre>{handles_str}</pre>\n\nTap to copy and paste into any campaign.",
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "scout_create_campaign")
+async def cb_scout_create_campaign(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    handles = data.get("scouted_handles", [])
+    if not handles:
+        await callback.answer("Session expired. Please scout again.", show_alert=True)
+        return
+
+    from bot.states.campaign_states import AddCampaignStates
+    await state.set_state(AddCampaignStates.waiting_for_campaign_name)
+    await callback.message.answer(
+        f"🚀 <b>Creating Campaign from {len(handles)} Scouted Leads!</b>\n\n"
+        "What would you like to name this new campaign?\n"
+        "<i>(e.g. Presale_Outreach, Alpha_Leads)</i>",
+        parse_mode="HTML"
+    )
+    await callback.answer()
 
 # ──────────────────────────────────────────────
 # ADD TARGETS

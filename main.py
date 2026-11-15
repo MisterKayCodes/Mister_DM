@@ -40,11 +40,14 @@ async def on_shutdown(bot: Bot):
     await bot.session.close()
     logger.info("👋 Goodbye!")
 
+from aiogram.client.session.aiohttp import AiohttpSession
+
 async def main():
     logger.info("🚀 Starting up, please wait...")
     await init_db()
 
-    bot = Bot(token=BOT_TOKEN)
+    session = AiohttpSession(timeout=60.0)
+    bot = Bot(token=BOT_TOKEN, session=session)
     dp = Dispatcher()
     dp.include_router(war_room_handler)
     dp.include_router(approval_router)

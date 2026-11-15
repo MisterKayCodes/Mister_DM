@@ -159,17 +159,30 @@ async def process_scout_depth_and_run(message: Message, state: FSMContext):
         return
 
     status_msg = await message.answer(
-        f"⏳ <b>Scouting in progress...</b>\n\nScanning the last {depth} messages in <code>{safe_html(target_group)}</code> through Mister Simulator's fleet. Please wait 5-10 seconds...",
+        f"⚡ <b>Scout Started!</b>\n\n"
+        f"📡 Connecting to Mister Simulator fleet...\n"
+        f"🎯 Target: <code>{safe_html(target_group)}</code>\n"
+        f"🔍 Fetching up to {depth} messages...\n\n"
+        "<i>Please wait, scanning in progress...</i>",
         parse_mode="HTML"
     )
 
     from clients.simulator_client import simulator_client
     try:
+        await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
         res = await simulator_client.scout_group_messages(target_group=target_group, limit=depth)
     except Exception as e:
         await status_msg.edit_text(f"❌ <b>Scout Error:</b> Failed to connect to Simulator API: {e}", parse_mode="HTML")
         await state.clear()
         return
+
+    # Update feedback when simulator finishes and we are building file
+    await status_msg.edit_text(
+        f"📊 <b>Messages Retrieved!</b>\n\n"
+        f"Parsing chatters and formatting transcript file...\n"
+        "Almost done!",
+        parse_mode="HTML"
+    )
 
     messages = res.get("messages", []) if isinstance(res, dict) else []
     if not messages:
@@ -253,13 +266,28 @@ async def process_scout_depth_and_run(message: Message, state: FSMContext):
     all_handles = [h for h, _ in sorted_chatters]
     await state.update_data(scouted_handles=all_handles, scouted_target_group=target_group)
 
-    await status_msg.delete()
-    await message.answer_document(
-        document=file_input,
-        caption="\n".join(summary_lines),
-        parse_mode="HTML",
-        reply_markup=scout_actions_keyboard()
-    )
+    await message.bot.send_chat_action(chat_id=message.chat.id, action="upload_document")
+    try:
+        await message.answer_document(
+            document=file_input,
+            caption="\n".join(summary_lines),
+            parse_mode="HTML",
+            reply_markup=scout_actions_keyboard(),
+            request_timeout=60.0
+        )
+    except Exception as doc_err:
+        logger.warning(f"Failed to send as document: {doc_err}, falling back to summary message")
+        await message.answer(
+            "\n".join(summary_lines),
+            parse_mode="HTML",
+            reply_markup=scout_actions_keyboard()
+        )
+
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass
+
     await message.answer(
         "💡 <b>Transcript Ready!</b>\n"
         "• Send the file above to Claude/Gemini to analyze buyer intent.\n"

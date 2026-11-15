@@ -151,6 +151,7 @@ async def process_campaign_account(message: Message, state: FSMContext):
 
     data = await state.get_data()
     campaign_name = data.get("name")
+    auto_import_handles = data.get("auto_import_handles")
 
     try:
         success, msg = await CampaignService.add_campaign(campaign_name, account_id, session_name=session_name)
@@ -161,8 +162,24 @@ async def process_campaign_account(message: Message, state: FSMContext):
         return
 
     if success:
+        # Check if we have scouted handles to automatically inject
+        imported_count = 0
+        if auto_import_handles:
+            try:
+                new_camp = await CampaignService.get_campaign_by_name(campaign_name)
+                if new_camp:
+                    from services.leads import TargetService
+                    res = await TargetService.add_targets_bulk(new_camp["id"], "\n".join(auto_import_handles))
+                    imported_count = res.get("added_count", len(auto_import_handles))
+            except Exception as auto_err:
+                logger.error(f"Failed auto-importing scouted targets: {auto_err}")
+
+        base_msg = CAMP_CREATE_OK.format(name=safe_html(campaign_name), account=safe_html(account_name))
+        if imported_count > 0:
+            base_msg += f"\n\n👥 <b>Auto-Loaded {imported_count} Scouted Leads!</b>\n👉 Tap <b>📤 Ready to Send</b> to view campaign and add your message template."
+
         await message.answer(
-            CAMP_CREATE_OK.format(name=safe_html(campaign_name), account=safe_html(account_name)),
+            base_msg,
             reply_markup=campaigns_menu_keyboard(),
             parse_mode="HTML"
         )

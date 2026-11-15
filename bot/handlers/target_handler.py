@@ -18,6 +18,9 @@ from bot.keyboards.account_keyboards import main_menu_keyboard
 from bot.keyboards.campaign_keyboards import campaigns_menu_keyboard
 from services.leads import TargetService
 from services.campaigns import CampaignService
+
+# Persistent in-memory lead cache: user_id -> {"handles": [...], "target_group": "..."}
+USER_SCOUT_CACHE: dict[int, dict] = {}
 from utils.telegram_utils import safe_html
 
 router = Router()
@@ -262,8 +265,12 @@ async def process_scout_depth_and_run(message: Message, state: FSMContext):
     file_bytes = io.BytesIO(transcript_text.encode("utf-8"))
     file_input = BufferedInputFile(file_bytes.getvalue(), filename=f"chat_transcript_{len(chrono_messages)}.txt")
 
-    # Save handles in FSM for 1-tap campaign creation
+    # Save handles both in FSM and persistent user cache
     all_handles = [h for h, _ in sorted_chatters]
+    USER_SCOUT_CACHE[message.from_user.id] = {
+        "handles": all_handles,
+        "target_group": target_group
+    }
     await state.update_data(scouted_handles=all_handles, scouted_target_group=target_group)
 
     await message.bot.send_chat_action(chat_id=message.chat.id, action="upload_document")
@@ -304,9 +311,14 @@ async def process_scout_depth_and_run(message: Message, state: FSMContext):
 @router.callback_query(F.data == "scout_copy_handles")
 async def cb_scout_copy_handles(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    handles = data.get("scouted_handles", [])
+    handles = data.get("scouted_handles")
     if not handles:
-        await callback.answer("No handles stored in current session.", show_alert=True)
+        cached = USER_SCOUT_CACHE.get(callback.from_user.id)
+        if cached:
+            handles = cached.get("handles", [])
+
+    if not handles:
+        await callback.answer("No scouted leads in memory. Please scout a group.", show_alert=True)
         return
 
     handles_str = "\n".join(handles)
@@ -320,18 +332,28 @@ async def cb_scout_copy_handles(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "scout_create_campaign")
 async def cb_scout_create_campaign(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    handles = data.get("scouted_handles", [])
+    handles = data.get("scouted_handles")
+    target_group = data.get("scouted_target_group")
     if not handles:
-        await callback.answer("Session expired. Please scout again.", show_alert=True)
+        cached = USER_SCOUT_CACHE.get(callback.from_user.id)
+        if cached:
+            handles = cached.get("handles", [])
+            target_group = cached.get("target_group", "Scouted Group")
+
+    if not handles:
+        await callback.answer("No scouted leads in memory. Please scout a group first.", show_alert=True)
         return
 
     from bot.states.campaign_states import AddCampaignStates
-    await state.set_state(AddCampaignStates.waiting_for_campaign_name)
+    await state.set_state(AddCampaignStates.waiting_for_name)
+    await state.update_data(auto_import_handles=handles, scout_source_group=target_group)
+
     await callback.message.answer(
-        f"🚀 <b>Creating Campaign from {len(handles)} Scouted Leads!</b>\n\n"
-        "What would you like to name this new campaign?\n"
-        "<i>(e.g. Presale_Outreach, Alpha_Leads)</i>",
-        parse_mode="HTML"
+        f"🚀 <b>Ready to Create Campaign with {len(handles)} Scouted Leads!</b>\n\n"
+        "Send a name for this new campaign:\n"
+        "<i>(e.g. Cheltenham_VIP, Alpha_Syndicate)</i>",
+        parse_mode="HTML",
+        reply_markup=ReplyKeyboardRemove()
     )
     await callback.answer()
 

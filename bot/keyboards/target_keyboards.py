@@ -2,14 +2,34 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 
 def import_method_keyboard() -> ReplyKeyboardMarkup:
-    """Offers the two import methods for targets."""
+    """Offers the lead discovery and import methods for targets."""
     return ReplyKeyboardMarkup(
         keyboard=[
+            [
+                KeyboardButton(text="🔍 Scout Group for People")
+            ],
             [
                 KeyboardButton(text="📝 Paste Usernames"),
                 KeyboardButton(text="📁 Upload TXT File")
             ],
-            [KeyboardButton(text="❌ Cancel")]
+            [KeyboardButton(text="⬅️ Back to Main")]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+def scout_depth_keyboard() -> ReplyKeyboardMarkup:
+    """Choose depth of messages to scout."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="⚡ Quick (100 messages)"),
+                KeyboardButton(text="🎯 Standard (250 messages)")
+            ],
+            [
+                KeyboardButton(text="🌊 Deep (500 messages)"),
+                KeyboardButton(text="❌ Cancel Scout")
+            ]
         ],
         resize_keyboard=True,
         one_time_keyboard=True

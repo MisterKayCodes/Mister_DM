@@ -217,4 +217,24 @@ class SimulatorClient(BaseClient):
         dm_webhook_url = f"http://localhost:{config.DM_API_PORT}/api/v1/webhook/reply"
         return await self._request("POST", "/api/v1/webhook/reply", json=payload)
 
+    async def scout_group_messages(
+        self,
+        target_group: str,
+        limit: int = 150,
+        session_name: str | None = None
+    ) -> dict:
+        """
+        Calls Simulator's POST /api/v1/telethon/scout/messages to extract
+        active chatters, messages, and timestamps from a target Telegram group.
+        """
+        payload = {
+            "target": target_group,
+            "limit": limit
+        }
+        if session_name:
+            payload["session_name"] = session_name
+
+        res = await self._request("POST", "/api/v1/telethon/scout/messages", json=payload)
+        return res if isinstance(res, dict) else {"success": False, "messages": []}
+
 simulator_client = SimulatorClient()

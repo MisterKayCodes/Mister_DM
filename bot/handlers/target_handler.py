@@ -98,6 +98,146 @@ async def find_people_root_menu(message: Message, state: FSMContext):
     )
 
 # ──────────────────────────────────────────────
+# GROUP SCOUT ENGINE
+# ──────────────────────────────────────────────
+
+@router.message(F.text.in_({"🔍 Scout Group for People", "Scout Group"}), StateFilter("*"))
+async def start_group_scout(message: Message, state: FSMContext):
+    await state.clear()
+    from bot.keyboards.navigation_keyboards import back_and_home_inline
+    await message.answer(
+        "🔍 <b>Scout Target Group</b>\n\n"
+        "Send me the link or @username of the Telegram group you want to scout:\n\n"
+        "<i>Examples:</i>\n"
+        "• <code>https://t.me/CryptoWhalesChat</code>\n"
+        "• <code>@ForexTradingLive</code>\n"
+        "• <code>https://t.me/+joinchat_hash...</code>",
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode="HTML"
+    )
+    await message.answer("Or tap below to cancel:", reply_markup=back_and_home_inline())
+    await state.set_state(AddTargetStates.waiting_for_scout_link)
+
+@router.message(AddTargetStates.waiting_for_scout_link)
+async def process_scout_link(message: Message, state: FSMContext):
+    link = message.text.strip() if message.text else ""
+    if not link or len(link) < 3:
+        await message.answer("❌ Please provide a valid Telegram group link or @username.")
+        return
+
+    await state.update_data(scout_target_group=link)
+    from bot.keyboards.target_keyboards import scout_depth_keyboard
+    await message.answer(
+        f"🎯 Target: <code>{safe_html(link)}</code>\n\n"
+        "How deep should the scout scan recent messages to find active chatters?",
+        reply_markup=scout_depth_keyboard(),
+        parse_mode="HTML"
+    )
+    await state.set_state(AddTargetStates.waiting_for_scout_depth)
+
+@router.message(AddTargetStates.waiting_for_scout_depth)
+async def process_scout_depth_and_run(message: Message, state: FSMContext):
+    text = message.text or ""
+    if "Cancel" in text:
+        await state.clear()
+        await message.answer("Scout cancelled.", reply_markup=main_menu_keyboard())
+        return
+
+    depth = 150
+    if "100" in text:
+        depth = 100
+    elif "250" in text:
+        depth = 250
+    elif "500" in text:
+        depth = 500
+
+    data = await state.get_data()
+    target_group = data.get("scout_target_group")
+    if not target_group:
+        await state.clear()
+        await message.answer("Lost scout target. Please try again.", reply_markup=main_menu_keyboard())
+        return
+
+    status_msg = await message.answer(
+        f"⏳ <b>Scouting in progress...</b>\n\nScanning the last {depth} messages in <code>{safe_html(target_group)}</code> through Mister Simulator's fleet. Please wait 5-10 seconds...",
+        parse_mode="HTML"
+    )
+
+    from clients.simulator_client import simulator_client
+    try:
+        res = await simulator_client.scout_group_messages(target_group=target_group, limit=depth)
+    except Exception as e:
+        await status_msg.edit_text(f"❌ <b>Scout Error:</b> Failed to connect to Simulator API: {e}", parse_mode="HTML")
+        await state.clear()
+        return
+
+    messages = res.get("messages", []) if isinstance(res, dict) else []
+    if not messages:
+        await status_msg.edit_text(
+            f"⚠️ <b>No Active Chatters Found</b>\n\nCould not extract messages from <code>{safe_html(target_group)}</code>.\n"
+            "Ensure the group is public or a fleet account is inside the chat.",
+            reply_markup=main_menu_keyboard(),
+            parse_mode="HTML"
+        )
+        await state.clear()
+        return
+
+    # Extract active unique users with message counts and recent snippet
+    chatters = {}
+    for m in messages:
+        username = m.get("sender_username")
+        sender_name = m.get("sender_name", "User")
+        text_snippet = (m.get("text") or "").strip().replace("\n", " ")
+        if username and not username.lower().endswith("bot"):
+            handle = f"@{username.lstrip('@')}"
+            if handle not in chatters:
+                chatters[handle] = {
+                    "name": sender_name,
+                    "count": 0,
+                    "last_msg": text_snippet[:80]
+                }
+            chatters[handle]["count"] += 1
+            if text_snippet and not chatters[handle]["last_msg"]:
+                chatters[handle]["last_msg"] = text_snippet[:80]
+
+    if not chatters:
+        await status_msg.edit_text(
+            f"⚠️ Scanned {len(messages)} messages, but none had public @usernames (or all were bots).",
+            reply_markup=main_menu_keyboard()
+        )
+        await state.clear()
+        return
+
+    # Sort by activity
+    sorted_chatters = sorted(chatters.items(), key=lambda x: x[1]["count"], reverse=True)
+    summary_lines = [
+        f"✅ <b>Scout Complete: {safe_html(target_group)}</b>",
+        f"📊 Scanned: {len(messages)} messages",
+        f"👥 Found <b>{len(sorted_chatters)} active people</b> with @usernames:\n"
+    ]
+
+    for handle, info in sorted_chatters[:12]:
+        msg_preview = f' - <i>"{safe_html(info["last_msg"])}..."</i>' if info["last_msg"] else ""
+        summary_lines.append(f"• <b>{handle}</b> ({info['name']}) [{info['count']} msgs]{msg_preview}")
+
+    if len(sorted_chatters) > 12:
+        summary_lines.append(f"\n<i>...and {len(sorted_chatters) - 12} more people.</i>")
+
+    # Generate txt file with all handles
+    handles_text = "\n".join([f"{handle} | {info['name']} | {info['last_msg']}" for handle, info in sorted_chatters])
+    file_bytes = io.BytesIO(handles_text.encode("utf-8"))
+    file_input = BufferedInputFile(file_bytes.getvalue(), filename=f"scout_{len(sorted_chatters)}_people.txt")
+
+    await status_msg.delete()
+    await message.answer_document(
+        document=file_input,
+        caption="\n".join(summary_lines),
+        parse_mode="HTML",
+        reply_markup=main_menu_keyboard()
+    )
+    await state.clear()
+
+# ──────────────────────────────────────────────
 # ADD TARGETS
 # ──────────────────────────────────────────────
 

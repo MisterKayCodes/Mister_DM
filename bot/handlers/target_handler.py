@@ -176,9 +176,9 @@ async def process_scout_depth_and_run(message: Message, state: FSMContext):
         await status_msg.edit_text(
             f"⚠️ <b>No Active Chatters Found</b>\n\nCould not extract messages from <code>{safe_html(target_group)}</code>.\n"
             "Ensure the group is public or a fleet account is inside the chat.",
-            reply_markup=main_menu_keyboard(),
             parse_mode="HTML"
         )
+        await message.answer("What would you like to do?", reply_markup=main_menu_keyboard())
         await state.clear()
         return
 
@@ -203,8 +203,8 @@ async def process_scout_depth_and_run(message: Message, state: FSMContext):
     if not chatters:
         await status_msg.edit_text(
             f"⚠️ Scanned {len(messages)} messages, but none had public @usernames (or all were bots).",
-            reply_markup=main_menu_keyboard()
         )
+        await message.answer("What would you like to do?", reply_markup=main_menu_keyboard())
         await state.clear()
         return
 

@@ -6,9 +6,9 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.database import AsyncSessionLocal
-from data.models.account import Account
-from data.models.campaign import Campaign
-from data.models.target import Target
+from data.models.accounts.account import Account
+from data.models.campaigns.campaign import Campaign
+from data.models.leads.target import Target
 
 async def seed_data():
     print("🌱 Seeding test data...")

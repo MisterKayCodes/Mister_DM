@@ -3,8 +3,8 @@ import pytest_asyncio
 import json
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from data.models import Base, Campaign, Target, Persona
-from data.repositories.target_repo import get_target_by_id, add_targets_bulk
-from data.repositories.mirror_observations_repo import MirrorObservationsRepository
+from data.repositories.leads.target_repo import get_target_by_id, add_targets_bulk
+from data.repositories.leads.mirror_observations_repo import MirrorObservationsRepository
 from services.intelligence_service import IntelligenceService, intelligence_service
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"

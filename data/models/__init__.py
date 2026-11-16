@@ -2,18 +2,21 @@ from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
-from .account import Account
-from .campaign import Campaign
-from .template import Template
-from .target import Target
-from .pain_tag import PainTag, target_pain_tags
-from .message import MessageLog
-from .blacklist import Blacklist
-from .persona import Persona
-from .intel_entry import IntelEntry
-from .relationship_chat import RelationshipChat
-from .relationship_message import RelationshipMessage
-from .ai_intent import AIIntent
-from .mirror_observation_buffer import MirrorObservationBuffer
-from .draft_reply import DraftReply
-from .system_setting import SystemSetting
+# Domain subpackage imports — models are registered here once via domain paths.
+from .accounts.account import Account
+from .accounts.blacklist import Blacklist
+from .accounts.persona import Persona
+from .campaigns.campaign import Campaign
+from .campaigns.template import Template
+from .leads.target import Target
+from .leads.pain_tag import PainTag, target_pain_tags
+from .leads.intel_entry import IntelEntry
+from .leads.ai_intent import AIIntent
+from .leads.story_arc import StoryArc
+from .leads.arc_media import ArcMedia
+from .leads.draft_reply import DraftReply
+from .leads.relationship_chat import RelationshipChat
+from .leads.relationship_message import RelationshipMessage
+from .leads.mirror_observation_buffer import MirrorObservationBuffer
+from .messaging.message import MessageLog
+from .settings.system_setting import SystemSetting

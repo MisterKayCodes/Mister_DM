@@ -4,8 +4,8 @@ import uuid
 import re
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from data.repositories.target_repo import get_target_by_id, update_target_relational_data
-from data.repositories.mirror_observations_repo import MirrorObservationsRepository
+from data.repositories.leads.target_repo import get_target_by_id, update_target_relational_data
+from data.repositories.leads.mirror_observations_repo import MirrorObservationsRepository
 from providers.groq_client import groq_client
 
 logger = logging.getLogger(__name__)

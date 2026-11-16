@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from data.database import AsyncSessionLocal
 from data.repositories import target_repo
-from data.models.target import Target
+from data.models.leads.target import Target
 from utils.dto_builders import target_to_dto
 from services.leads import IntakeService
 from sqlalchemy import select

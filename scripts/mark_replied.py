@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sqlalchemy.future import select
 from sqlalchemy import update, func
 from data.database import AsyncSessionLocal
-from data.models.target import Target
+from data.models.leads.target import Target
 
 async def mark_targets_replied():
     print("🔄 Marking all 'sent' targets as 'replied'...")

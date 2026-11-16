@@ -7,7 +7,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from data.database import AsyncSessionLocal
-from data.repositories.personas_repo import get_all_personas, create_persona
+from data.repositories.accounts.personas_repo import get_all_personas, create_persona
 
 ELENA_RICKEY = {
     "name": "Elena Rickey",

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from data.database import AsyncSessionLocal
 from data.repositories import stats_repo
-from data.models.target import Target
+from data.models.leads.target import Target
 from sqlalchemy import select, func
 
 router = APIRouter(tags=["Stats"])
@@ -42,9 +42,9 @@ async def get_empire_ledger(limit: int = 50):
     👑 Empire Standard Ledger Route for Mister DM.
     Exposes outbound & inbound DM actions formatted for Mister Chief aggregation.
     """
-    from data.models.message import MessageLog
-    from data.models.target import Target
-    from data.models.campaign import Campaign
+    from data.models.messaging.message import MessageLog
+    from data.models.leads.target import Target
+    from data.models.campaigns.campaign import Campaign
     from sqlalchemy.orm import selectinload
 
     async with AsyncSessionLocal() as session:

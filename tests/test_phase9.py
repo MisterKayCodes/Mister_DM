@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from data.database import init_db, AsyncSessionLocal
 from data.repositories import target_repo, campaign_repo
-from data.models.target import Target
+from data.models.leads.target import Target
 from core.prompt_builder import build_personalized_opener_prompt
 
 

@@ -12,10 +12,10 @@ from datetime import datetime, timedelta, timezone
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.database import AsyncSessionLocal
-from data.models.message import MessageLog
-from data.models.target import Target
-from data.models.campaign import Campaign
-from data.models.account import Account
+from data.models.messaging.message import MessageLog
+from data.models.leads.target import Target
+from data.models.campaigns.campaign import Campaign
+from data.models.accounts.account import Account
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 

@@ -1,5 +1,5 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from data.models.account import Account
+from data.models.accounts.account import Account
 
 def campaigns_menu_keyboard() -> ReplyKeyboardMarkup:
     """The campaigns menu keyboard."""

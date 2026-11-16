@@ -1,5 +1,5 @@
-from data.models.campaign import Campaign
-from data.models.target import Target
+from data.models.campaigns.campaign import Campaign
+from data.models.leads.target import Target
 
 def campaign_to_dto(campaign: Campaign) -> dict:
     """

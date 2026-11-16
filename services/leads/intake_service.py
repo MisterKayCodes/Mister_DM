@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from data.database import AsyncSessionLocal
 from data.repositories import target_repo, campaign_repo
-from data.models.campaign import Campaign
+from data.models.campaigns.campaign import Campaign
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from data.database import AsyncSessionLocal
 from data.repositories import target_repo
-from data.models.target import Target
+from data.models.leads.target import Target
 from sqlalchemy import select
 from sqlalchemy.sql import func
 from services.leads import TriageService

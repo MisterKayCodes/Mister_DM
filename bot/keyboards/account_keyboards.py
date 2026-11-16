@@ -22,14 +22,15 @@ def settings_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text="📱 Fleet & Sessions"),
-                KeyboardButton(text="📊 Stats")
+                KeyboardButton(text="🛡️ Outreach Safety"),
+                KeyboardButton(text="📱 Fleet & Sessions")
             ],
             [
-                KeyboardButton(text="🚫 Blacklist"),
-                KeyboardButton(text="⚡ API Usage")
+                KeyboardButton(text="📊 Stats"),
+                KeyboardButton(text="🚫 Blacklist")
             ],
             [
+                KeyboardButton(text="⚡ API Usage"),
                 KeyboardButton(text="⬅️ Back to Main")
             ]
         ],

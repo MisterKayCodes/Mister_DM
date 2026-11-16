@@ -8,7 +8,7 @@ from bot.handlers.accounts import account_router
 from bot.handlers.campaigns import campaign_router, template_router
 from bot.handlers.leads import target_router as target_handler, blacklist_router as blacklist_handler, pain_point_router as pain_point_handler
 from bot.handlers.conversations import replies_router as replies_handler, war_room_router as war_room_handler, approval_router
-from bot.handlers.reporting import stats_router as stats_handler, export_router as export_handler, dashboard_router
+from bot.handlers.reporting import stats_router as stats_handler, export_router as export_handler, dashboard_router, safety_router
 from services.campaigns import CampaignService, SchedulerService
 from services.accounts import AccountService
 from api.server import start_api_server
@@ -55,6 +55,7 @@ async def main():
     dp.include_router(export_handler)
     dp.include_router(stats_handler)
     dp.include_router(blacklist_handler)
+    dp.include_router(safety_router)
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

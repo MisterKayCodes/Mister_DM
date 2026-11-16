@@ -3,18 +3,12 @@ import logging
 from aiogram import Bot, Dispatcher
 from config import BOT_TOKEN
 from data.database import init_db
-from bot.handlers.account_handler import router as account_router
-from bot.handlers.campaign_handler import router as campaign_router
-from bot.handlers.template_handler import router as template_router
-from bot.handlers.target_handler import router as target_handler
-from bot.handlers.replies_handler import router as replies_handler
-from bot.handlers.pain_point_handler import router as pain_point_handler
-from bot.handlers.export_handler import router as export_handler
-from bot.handlers.stats_handler import router as stats_handler
-from bot.handlers.blacklist_handler import router as blacklist_handler
-from bot.handlers.war_room_handler import router as war_room_handler
-from bot.handlers.approval_handler import router as approval_router
-from bot.handlers.dashboard_handlers import router as dashboard_router
+# Domain Routers
+from bot.handlers.accounts import account_router
+from bot.handlers.campaigns import campaign_router, template_router
+from bot.handlers.leads import target_router as target_handler, blacklist_router as blacklist_handler, pain_point_router as pain_point_handler
+from bot.handlers.conversations import replies_router as replies_handler, war_room_router as war_room_handler, approval_router
+from bot.handlers.reporting import stats_router as stats_handler, export_router as export_handler, dashboard_router
 from services.campaigns import CampaignService, SchedulerService
 from services.accounts import AccountService
 from api.server import start_api_server

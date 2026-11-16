@@ -3,6 +3,23 @@ from sqlalchemy.future import select
 from sqlalchemy import func
 from data.models.template import Template
 
+async def add_templates_bulk(session: AsyncSession, campaign_id: int, contents: list[str]) -> tuple[bool, str, int]:
+    """Adds multiple templates to a campaign in a single transaction."""
+    if not contents:
+        return False, "No template contents provided.", 0
+    
+    new_templates = [Template(campaign_id=campaign_id, content=c.strip()) for c in contents if c.strip()]
+    if not new_templates:
+        return False, "All provided templates were empty.", 0
+        
+    session.add_all(new_templates)
+    try:
+        await session.commit()
+        return True, f"Successfully added {len(new_templates)} template(s).", len(new_templates)
+    except Exception as e:
+        await session.rollback()
+        return False, f"Error adding templates: {e}", 0
+
 async def add_template(session: AsyncSession, campaign_id: int, content: str) -> tuple[bool, str]:
     """Adds a new template to a campaign."""
     new_template = Template(

@@ -12,6 +12,11 @@ class TemplateService:
         async with AsyncSessionLocal() as session:
             return await template_repo.add_template(session, campaign_id, content)
 
+    @staticmethod
+    async def add_templates_bulk(campaign_id: int, contents: list[str]) -> tuple[bool, str, int]:
+        async with AsyncSessionLocal() as session:
+            return await template_repo.add_templates_bulk(session, campaign_id, contents)
+
     # #FIXED: Compact Retrieval Into the Live Context
     # Handles dictionary conversion natively inside its active session block.
     # Returns purely decoupled python dict arrays.

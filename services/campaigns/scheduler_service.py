@@ -93,6 +93,7 @@ class SchedulerService:
         """
         logger.info(f"[SCHEDULER] Started campaign {campaign_id} (Session: {session_name or 'Local Account'})")
         skipped_restricted_count = 0
+        dispatch_iteration = 0
         
         try:
             while True:
@@ -209,7 +210,9 @@ class SchedulerService:
                     break
                     
                 template_contents = [t["content"] for t in templates]
-                template = random.choice(templates)
+                # Round-robin selection: cycle through templates in sequence
+                template = templates[dispatch_iteration % len(templates)]
+                dispatch_iteration += 1
                 message_text = template["content"]
                 template_id = template["id"]
                 

@@ -53,22 +53,31 @@ async def add_template_start(message: Message, state: FSMContext):
         return
 
     await message.answer(
-        "Send me the message content for this template.\n(Variables like {first_name} coming soon)\n\n"
-        "Send '❌ Cancel' to cancel.",
-        reply_markup=ReplyKeyboardRemove()
+        "📝 <b>ADD TEMPLATE(S)</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "• Send a single message template, OR\n"
+        "• Send multiple variations separated by <code>---</code> or <code>===</code>, OR\n"
+        "• Upload a <b>.txt</b> file containing variations separated by <code>---</code>.\n\n"
+        "<i>Variables available:</i> <code>{username}</code>, <code>{first_name}</code>\n"
+        "Send '❌ Cancel' to return.",
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode="HTML"
     )
     await state.set_state(AddTemplateStates.waiting_for_content)
 
 
+def _split_template_variants(raw_text: str) -> list[str]:
+    """Splits raw text by --- or === delimiters and strips whitespace."""
+    import re
+    # Split on lines with 3 or more dashes or equals signs
+    parts = re.split(r'(?:\r?\n|^)\s*(?:-{3,}|={3,})\s*(?:\r?\n|$)', raw_text)
+    return [p.strip() for p in parts if p.strip()]
+
+
 @router.message(AddTemplateStates.waiting_for_content)
 async def process_template_content(message: Message, state: FSMContext):
-    content = message.text.strip()
-
-    if content == "❌ Cancel":
-        # #FIXED: Removed handler-to-handler call `await back_to_campaign_handler(message, state)`.
-        # WHAT WAS ADJUSTED: Inlined the Back logic directly — set state to None, fetch summary, reply.
-        # PREVENTED FAILURE: Calling one handler from inside another creates tight coupling. If
-        # back_to_campaign_handler changes its signature or adds middleware, every caller silently breaks.
+    # Support Cancel check
+    if message.text and message.text.strip() == "❌ Cancel":
         await state.set_state(None)
         data = await state.get_data()
         campaign_id = data.get("current_campaign_id")
@@ -80,17 +89,48 @@ async def process_template_content(message: Message, state: FSMContext):
             await message.answer("Lost context.", reply_markup=campaigns_menu_keyboard())
         return
 
-    if not content:
-        await message.answer("Template cannot be empty. Please send the message text:")
-        return
-
     data = await state.get_data()
     campaign_id = data.get("current_campaign_id")
+    if not campaign_id:
+        await state.set_state(None)
+        await message.answer("Lost campaign context.", reply_markup=campaigns_menu_keyboard())
+        return
 
-    success, msg = await TemplateService.add_template(campaign_id, content)
+    raw_text = ""
+    # Case 1: Uploaded .txt document
+    if message.document:
+        doc = message.document
+        if not (doc.file_name and doc.file_name.lower().endswith(".txt")):
+            await message.answer("❌ Please upload a plain .txt file, or send the templates as a text message.")
+            return
+
+        bot = message.bot
+        file_io = await bot.download(doc.file_id)
+        raw_text = file_io.read().decode("utf-8", errors="ignore")
+    # Case 2: Direct text message
+    elif message.text:
+        raw_text = message.text.strip()
+    else:
+        await message.answer("❌ Please send a text message or a .txt file.")
+        return
+
+    variants = _split_template_variants(raw_text)
+    if not variants:
+        await message.answer("❌ No valid template content found. Please send non-empty text:")
+        return
+
+    # Add single or bulk
+    if len(variants) == 1:
+        success, msg = await TemplateService.add_template(campaign_id, variants[0])
+        count = 1 if success else 0
+    else:
+        success, msg, count = await TemplateService.add_templates_bulk(campaign_id, variants)
 
     if success:
-        await message.answer("✅ Template saved!", reply_markup=manage_campaign_keyboard())
+        if count > 1:
+            await message.answer(f"✅ <b>{count} Template Variants saved!</b>\nThe dispatcher will cycle through them round-robin.", reply_markup=manage_campaign_keyboard(), parse_mode="HTML")
+        else:
+            await message.answer("✅ Template saved!", reply_markup=manage_campaign_keyboard())
     else:
         await message.answer(f"❌ Failed: {msg}", reply_markup=manage_campaign_keyboard())
 

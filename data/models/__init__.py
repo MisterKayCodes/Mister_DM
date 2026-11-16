@@ -19,4 +19,5 @@ from .leads.relationship_chat import RelationshipChat
 from .leads.relationship_message import RelationshipMessage
 from .leads.mirror_observation_buffer import MirrorObservationBuffer
 from .messaging.message import MessageLog
+from .reporting.outreach_audit_log import OutreachAuditLog
 from .settings.system_setting import SystemSetting

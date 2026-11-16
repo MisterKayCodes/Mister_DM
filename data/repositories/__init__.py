@@ -8,5 +8,5 @@ from data.repositories.leads import (
     relationship_messages_repo, mirror_observations_repo
 )
 from data.repositories.messaging import message_repo
-from data.repositories.reporting import stats_repo
+from data.repositories.reporting import stats_repo, OutreachAuditRepo
 from data.repositories.settings import settings_repo

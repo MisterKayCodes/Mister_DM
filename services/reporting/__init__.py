@@ -1,2 +1,4 @@
 from .stats_service import StatsService
-__all__ = ["StatsService"]
+from .telemetry_service import TelemetryService
+
+__all__ = ["StatsService", "TelemetryService"]

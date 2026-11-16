@@ -7,6 +7,7 @@ from services.leads import TargetService
 from services.campaigns.template_service import TemplateService
 from services.accounts import AccountService, BlacklistService
 from services.messaging import MessageService
+from services.reporting.telemetry_service import TelemetryService
 from clients.telethon_client import send_outreach_message
 from core.state import restricted_sessions
 from clients.simulator_client import simulator_client
@@ -277,6 +278,8 @@ class SchedulerService:
                     continue
 
                 is_restricted_session = False
+                dispatch_outcome = "sent" if success else ("peer_flood" if is_restricted_session else "error")
+                error_detail_str = None
                 if target_session:
                     try:
                         res = await simulator_client.send_dm(
@@ -287,19 +290,44 @@ class SchedulerService:
                         success = res.get("status") == "success" or res.get("ok", False)
                         resolved_user_id = res.get("telegram_user_id") or res.get("user_id")
                         resolved_message_id = res.get("message_id")
+                        if success:
+                            dispatch_outcome = "sent"
+                        else:
+                            dispatch_outcome = res.get("error_code") or "error"
+                            error_detail_str = str(res.get("detail") or res.get("message") or "")
                     except APIUnavailableError as e:
                         logger.error(f"[SCHEDULER] Simulator API unavailable: {e}. Pausing campaign {campaign_id}.")
+                        await TelemetryService.record_dispatch(
+                            session_name=target_session or "unknown",
+                            target_username=target.get("username"),
+                            template_id=template_id,
+                            outcome="api_unavailable",
+                            error_details=str(e)
+                        )
                         await CampaignService.update_campaign_status(campaign_id, "paused")
                         break
                     except APIResponseError as e:
                         logger.error(f"[SCHEDULER] Simulator API error: {e}")
                         success = False
+                        error_detail_str = str(getattr(e, "detail", e))
+                        err_str = error_detail_str.lower()
+                        if "flood_wait" in err_str:
+                            dispatch_outcome = "flood_wait"
+                        elif "peer_flood" in err_str:
+                            dispatch_outcome = "peer_flood"
+                        elif "deactivated" in err_str or "banned" in err_str:
+                            dispatch_outcome = "banned"
+                        else:
+                            dispatch_outcome = "error"
+
                         if getattr(e, "status_code", None) == 403 and "can_dm=False" in str(getattr(e, "detail", "")):
                             is_restricted_session = True
                             restricted_sessions[target_session] = datetime.now()
+                            dispatch_outcome = "peer_flood"
 
                 # Delegation Path B: Legacy Local Account Fallback
                 elif account and account.get("session_string"):
+                    fallback_session = f"local_acc_{account.get('id', 'unknown')}"
                     success, resolved_user_id = await send_outreach_message(
                         session_string=account["session_string"],
                         username=target["username"],
@@ -307,6 +335,17 @@ class SchedulerService:
                         dry_run=DRY_RUN
                     )
                     resolved_message_id = None
+                    dispatch_outcome = "sent" if success else "error"
+
+                # Record Telemetry attempt
+                effective_session = target_session or (f"local_acc_{account.get('id')}" if account else "unknown")
+                await TelemetryService.record_dispatch(
+                    session_name=effective_session,
+                    target_username=target.get("username"),
+                    template_id=template_id,
+                    outcome=dispatch_outcome,
+                    error_details=error_detail_str
+                )
 
                 if is_restricted_session:
                     if target.get("assigned_session") == target_session:
